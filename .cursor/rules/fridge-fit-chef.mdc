@@ -1,0 +1,18 @@
+---
+description: Fridge Fit Chef single-file app conventions
+globs: web/**
+alwaysApply: false
+---
+
+# Fridge Fit Chef Rules
+
+- Keep primary UI in `web/fridge-fit-chef.html`; avoid splitting to frameworks.
+- Visual: Open Fridge Glow tokens + `html[data-activity]`; align with `web/design-demo.html`.
+- Activity theme via `applyActivityTheme` / `data-activity` only — do not hardcode blue SaaS accents.
+- Meal macros: prefer `.macro-rings` over bar charts for the signature result UI.
+- Supabase: only `@supabase/supabase-js@2` via CDN; keys in `config/config.js` (never commit).
+- Escape user-generated strings with `escapeHtml()` before DOM insertion.
+- Single-meal recommend uses `buildMealPlan`; targets are meal-level (40% of daily).
+- On save: localStorage first, then debounced Supabase push if configured.
+- Do not remove offline/local fallback when adding sync.
+- Visual-only PRs must not change meal engine / storage keys / SyncAdapter behavior.

@@ -1,0 +1,8 @@
+config/config.js
+dist/
+deploy/
+share-pack/
+tools/
+*.zip
+.superpowers/
+.playwright-mcp/

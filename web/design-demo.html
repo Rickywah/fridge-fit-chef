@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-activity="medium">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#DDE3DE">
+  <title>Design Demo — 冰箱健身餐</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1C2421;
+      --porcelain: #F7F8F6;
+      --shell: #DDE3DE;
+      --shell-deep: #C5CEC8;
+      --shell-glow: #EEF2EF;
+      --cta: #E8941A;
+      --cta-pressed: #C97A12;
+      --protein: #C45C48;
+      --carb: #5B7A6A;
+      --fat: #D4A017;
+      --muted: #5A6B63;
+      --line: rgba(28, 36, 33, 0.12);
+      --chip-active-bg: rgba(232, 148, 26, 0.12);
+      --theme-transition: background-color 0.35s ease, color 0.25s ease, border-color 0.25s ease;
+
+      --font-brand: "Syne", "Noto Sans SC", sans-serif;
+      --font-ui: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      --tab-h: 64px;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    /* Training intensity themes */
+    html[data-activity="rest"] {
+      --shell: #D5E0E4;
+      --shell-deep: #B7C8CF;
+      --shell-glow: #E8F0F3;
+      --cta: #5B8FA8;
+      --cta-pressed: #4A7A92;
+      --fat: #5B8FA8;
+      --chip-active-bg: rgba(91, 143, 168, 0.14);
+      --line: rgba(28, 36, 33, 0.12);
+    }
+    html[data-activity="medium"] {
+      --shell: #DDE3DE;
+      --shell-deep: #C5CEC8;
+      --shell-glow: #EEF2EF;
+      --cta: #E8941A;
+      --cta-pressed: #C97A12;
+      --fat: #D4A017;
+      --chip-active-bg: rgba(232, 148, 26, 0.12);
+    }
+    html[data-activity="high"] {
+      --shell: #E6DAD4;
+      --shell-deep: #D0B8AE;
+      --shell-glow: #F3E9E4;
+      --cta: #E85D2A;
+      --cta-pressed: #C94A1C;
+      --fat: #E85D2A;
+      --protein: #C94A3A;
+      --chip-active-bg: rgba(232, 93, 42, 0.14);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: var(--font-ui);
+      background:
+        radial-gradient(120% 80% at 50% -10%, var(--shell-glow) 0%, transparent 55%),
+        var(--shell);
+      color: var(--ink);
+      min-height: 100dvh;
+      line-height: 1.5;
+      transition: var(--theme-transition);
+    }
+
+    .demo-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--ink);
+      color: var(--porcelain);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-align: center;
+      padding: 8px 12px;
+      padding-top: max(8px, env(safe-area-inset-top));
+    }
+    .demo-banner strong { color: var(--cta); font-weight: 700; transition: color 0.25s ease; }
+
+    #app {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 20px 16px calc(var(--tab-h) + var(--safe-b) + 20px);
+    }
+
+    .panel { display: none; animation: rise 0.35s var(--ease); }
+    .panel.active { display: block; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .brand {
+      margin-bottom: 20px;
+    }
+    .brand-mark {
+      font-family: var(--font-ui);
+      font-size: clamp(1.75rem, 6vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.35;
+      color: var(--ink);
+      text-wrap: balance;
+    }
+    .brand-mark span {
+      display: block;
+      font-family: var(--font-brand);
+      font-size: 0.42em;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .brand-sub {
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--muted);
+      max-width: 28ch;
+    }
+
+    .hero-surface {
+      position: relative;
+      background: var(--porcelain);
+      border-radius: 20px;
+      padding: 22px 18px 20px;
+      margin-bottom: 16px;
+      box-shadow:
+        0 0 0 1px var(--line),
+        0 18px 40px -24px rgba(28, 36, 33, 0.35);
+      overflow: visible;
+    }
+    .hero-surface::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      height: 3px;
+      border-radius: 20px 20px 0 0;
+      background: linear-gradient(90deg, var(--protein), var(--carb), var(--fat));
+      opacity: 0.85;
+      transition: background 0.35s ease;
+    }
+    .hero-kicker {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .hero-title {
+      font-family: var(--font-brand);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.35;
+      margin-bottom: 14px;
+    }
+
+    .chips {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .chip {
+      min-height: 56px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .chip .e { font-size: 1.15rem; line-height: 1; }
+    .chip.active {
+      border-color: var(--cta);
+      color: var(--ink);
+      background: var(--chip-active-bg);
+      box-shadow: inset 0 0 0 1px var(--cta);
+    }
+    .chip:focus-visible {
+      outline: 2px solid var(--cta);
+      outline-offset: 2px;
+    }
+
+    .btn-cta {
+      width: 100%;
+      min-height: 48px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: var(--cta);
+      color: var(--ink);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: background 0.25s ease, transform 0.12s var(--ease);
+    }
+    .btn-cta:hover { background: var(--cta-pressed); }
+    .btn-cta:active { transform: scale(0.98); }
+    .btn-cta:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 2px;
+    }
+
+    .meal {
+      margin-top: 16px;
+      display: none;
+    }
+    .meal.show {
+      display: block;
+      animation: rise 0.4s var(--ease);
+    }
+    .meal-name {
+      font-family: var(--font-ui);
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.45;
+      margin-bottom: 6px;
+    }
+    .meal-meta {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin-bottom: 16px;
+      overflow: visible;
+      padding-bottom: 2px;
+    }
+
+    /* Signature: P/C/F macro rings */
+    .rings {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .ring {
+      flex: 1;
+      text-align: center;
+    }
+    .ring svg {
+      width: 72px;
+      height: 72px;
+      display: block;
+      margin: 0 auto 6px;
+      transform: rotate(-90deg);
+    }
+    .ring-track { fill: none; stroke: var(--shell-deep); stroke-width: 6; }
+    .ring-fill {
+      fill: none;
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 188.4;
+      stroke-dashoffset: 188.4;
+      transition: stroke-dashoffset 0.7s var(--ease);
+    }
+    .ring.p .ring-fill { stroke: var(--protein); transition: stroke 0.35s ease, stroke-dashoffset 0.7s var(--ease); }
+    .ring.c .ring-fill { stroke: var(--carb); transition: stroke 0.35s ease, stroke-dashoffset 0.7s var(--ease); }
+    .ring.f .ring-fill { stroke: var(--fat); transition: stroke 0.35s ease, stroke-dashoffset 0.7s var(--ease); }
+    .meal.show .ring.p .ring-fill { stroke-dashoffset: 56.5; }  /* ~70% */
+    .meal.show .ring.c .ring-fill { stroke-dashoffset: 75.4; }  /* ~60% */
+    .meal.show .ring.f .ring-fill { stroke-dashoffset: 113; }   /* ~40% */
+    .ring-label {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .ring-value {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.5;
+      color: var(--ink);
+      overflow: visible;
+      padding: 2px 0 4px;
+    }
+
+    .ing-list {
+      list-style: none;
+      font-size: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    .ing-list li {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      color: var(--ink);
+    }
+    .ing-list li span { color: var(--muted); font-size: 13px; }
+    .steps {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .steps ol { margin-left: 1.1rem; }
+    .steps li { margin-bottom: 4px; }
+
+    /* Fridge panel */
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--porcelain);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 0 12px;
+      min-height: 44px;
+      margin-bottom: 14px;
+    }
+    .search input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-family: var(--font-ui);
+      font-size: 14px;
+      color: var(--ink);
+      outline: none;
+      min-height: 42px;
+    }
+    .search input::placeholder { color: var(--muted); }
+
+    .cats {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      margin-bottom: 16px;
+      scrollbar-width: none;
+    }
+    .cats::-webkit-scrollbar { display: none; }
+    .cat {
+      flex-shrink: 0;
+      border: 1px solid var(--line);
+      background: var(--porcelain);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .cat.active {
+      background: var(--ink);
+      color: var(--porcelain);
+      border-color: var(--ink);
+    }
+
+    .shelf { display: flex; flex-direction: column; gap: 8px; }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--porcelain);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      border: 1px solid var(--line);
+    }
+    .row-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--shell);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      flex-shrink: 0;
+    }
+    .row-body { flex: 1; min-width: 0; overflow: visible; }
+    .row-name {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .row-meta {
+      font-family: var(--font-ui);
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin-top: 4px;
+      overflow: visible;
+      padding-bottom: 2px;
+    }
+    .row-qty {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--carb);
+      overflow: visible;
+      padding: 2px 0;
+      flex-shrink: 0;
+      transition: color 0.25s ease;
+    }
+    html[data-activity="rest"] .row-qty { color: var(--cta); }
+    html[data-activity="high"] .row-qty { color: var(--cta); }
+
+    .empty-hint {
+      text-align: center;
+      padding: 28px 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* Tab bar */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-width: 420px;
+      margin: 0 auto;
+      height: calc(var(--tab-h) + var(--safe-b));
+      padding: 0 8px var(--safe-b);
+      background: var(--porcelain);
+      border-top: 1px solid var(--line);
+      display: flex;
+      z-index: 100;
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      position: relative;
+      min-height: 44px;
+    }
+    .tab svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.75;
+    }
+    .tab.active { color: var(--ink); font-weight: 600; }
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      bottom: 6px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--cta);
+      transition: background 0.25s ease;
+    }
+    .tab:focus-visible {
+      outline: 2px solid var(--cta);
+      outline-offset: -4px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .meal.show .ring-fill { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-banner">
+    <strong>DESIGN DEMO</strong> — Open Fridge Glow · 确认后合入 fridge-fit-chef.html
+  </div>
+
+  <main id="app">
+    <section id="panel-today" class="panel active" role="tabpanel">
+      <header class="brand">
+        <h1 class="brand-mark">
+          <span>Fridge Fit Chef</span>
+          冰箱健身餐
+        </h1>
+        <p class="brand-sub">打开冰箱，这一顿按宏量算好。</p>
+      </header>
+
+      <div class="hero-surface">
+        <p class="hero-kicker">今天</p>
+        <h2 class="hero-title">训练后吃什么</h2>
+        <div class="chips" id="activity-chips" role="group" aria-label="训练状态">
+          <button type="button" class="chip" data-activity="rest"><span class="e">😴</span>休息日</button>
+          <button type="button" class="chip active" data-activity="medium"><span class="e">💪</span>常规</button>
+          <button type="button" class="chip" data-activity="high"><span class="e">🔥</span>高强度</button>
+        </div>
+        <button type="button" class="btn-cta" id="btn-generate">生成这顿</button>
+
+        <div class="meal" id="meal-result" aria-live="polite">
+          <h3 class="meal-name">鸡胸肉西兰花糙米饭</h3>
+          <p class="meal-meta">约 520 kcal · 库存可做 · 常规训练单餐</p>
+
+          <div class="rings" aria-label="宏量进度">
+            <div class="ring p">
+              <svg viewBox="0 0 72 72" aria-hidden="true">
+                <circle class="ring-track" cx="36" cy="36" r="30"/>
+                <circle class="ring-fill" cx="36" cy="36" r="30"/>
+              </svg>
+              <div class="ring-label">蛋白</div>
+              <div class="ring-value">42g</div>
+            </div>
+            <div class="ring c">
+              <svg viewBox="0 0 72 72" aria-hidden="true">
+                <circle class="ring-track" cx="36" cy="36" r="30"/>
+                <circle class="ring-fill" cx="36" cy="36" r="30"/>
+              </svg>
+              <div class="ring-label">碳水</div>
+              <div class="ring-value">48g</div>
+            </div>
+            <div class="ring f">
+              <svg viewBox="0 0 72 72" aria-hidden="true">
+                <circle class="ring-track" cx="36" cy="36" r="30"/>
+                <circle class="ring-fill" cx="36" cy="36" r="30"/>
+              </svg>
+              <div class="ring-label">脂肪</div>
+              <div class="ring-value">12g</div>
+            </div>
+          </div>
+
+          <ul class="ing-list">
+            <li>鸡胸肉 <span>150g</span></li>
+            <li>西兰花 <span>200g</span></li>
+            <li>糙米 <span>80g 干重</span></li>
+            <li>橄榄油 <span>5g</span></li>
+          </ul>
+          <div class="steps">
+            <ol>
+              <li>糙米先下锅，煮约 25 分钟。</li>
+              <li>鸡胸切片，少油煎至两面金黄。</li>
+              <li>西兰花焯水，与饭、肉同盘。</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-fridge" class="panel" role="tabpanel" hidden>
+      <header class="brand">
+        <h1 class="brand-mark">
+          <span>Inventory</span>
+          冰箱
+        </h1>
+        <p class="brand-sub">先加几样常用食材，再回今天生成。</p>
+      </header>
+
+      <div class="search">
+        <span aria-hidden="true">🔍</span>
+        <input type="search" placeholder="搜索食材…" readonly>
+      </div>
+
+      <div class="cats" role="tablist" aria-label="分类">
+        <button type="button" class="cat active">🧊 全部</button>
+        <button type="button" class="cat">🥚 蛋类</button>
+        <button type="button" class="cat">🍗 禽肉</button>
+        <button type="button" class="cat">🥬 青菜</button>
+        <button type="button" class="cat">🌾 主食</button>
+      </div>
+
+      <div class="shelf">
+        <div class="row">
+          <div class="row-icon">🍗</div>
+          <div class="row-body">
+            <div class="row-name">鸡胸肉</div>
+            <div class="row-meta">禽肉 · 31P / 0C / 3.6F</div>
+          </div>
+          <div class="row-qty">400g</div>
+        </div>
+        <div class="row">
+          <div class="row-icon">🥦</div>
+          <div class="row-body">
+            <div class="row-name">西兰花</div>
+            <div class="row-meta">青菜 · 2.8P / 7C / 0.4F</div>
+          </div>
+          <div class="row-qty">300g</div>
+        </div>
+        <div class="row">
+          <div class="row-icon">🍚</div>
+          <div class="row-body">
+            <div class="row-name">糙米</div>
+            <div class="row-meta">主食 · 7.5P / 76C / 2.7F</div>
+          </div>
+          <div class="row-qty">500g</div>
+        </div>
+        <div class="row">
+          <div class="row-icon">🥚</div>
+          <div class="row-body">
+            <div class="row-name">鸡蛋</div>
+            <div class="row-meta">蛋类 · 13P / 1.1C / 11F</div>
+          </div>
+          <div class="row-qty">6个</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tab-bar" role="tablist" aria-label="演示导航">
+    <button type="button" class="tab active" data-panel="today" role="tab" aria-selected="true">
+      <svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+      今天
+    </button>
+    <button type="button" class="tab" data-panel="fridge" role="tab" aria-selected="false">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg>
+      冰箱
+    </button>
+    <button type="button" class="tab" disabled title="Demo 仅示意" style="opacity:0.35">
+      <svg viewBox="0 0 24 24"><path d="M4 19h16M6 15h12M8 11h8M10 7h4"/></svg>
+      菜谱
+    </button>
+    <button type="button" class="tab" disabled title="Demo 仅示意" style="opacity:0.35">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+      我的
+    </button>
+  </nav>
+
+  <script>
+    (function () {
+      var activityLabels = {
+        rest: '休息日单餐',
+        medium: '常规训练单餐',
+        high: '高强度训练单餐'
+      };
+
+      function setActivity(activity) {
+        document.documentElement.setAttribute('data-activity', activity);
+        var meta = document.querySelector('.meal-meta');
+        if (meta) {
+          meta.textContent = '约 520 kcal · 库存可做 · ' + (activityLabels[activity] || activityLabels.medium);
+        }
+        var themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) {
+          var shell = getComputedStyle(document.documentElement).getPropertyValue('--shell').trim();
+          themeMeta.setAttribute('content', shell || '#DDE3DE');
+        }
+      }
+
+      setActivity('medium');
+
+      const chips = document.querySelectorAll('#activity-chips .chip');
+      chips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          chips.forEach(function (c) { c.classList.remove('active'); });
+          chip.classList.add('active');
+          setActivity(chip.getAttribute('data-activity') || 'medium');
+        });
+      });
+
+      document.getElementById('btn-generate').addEventListener('click', function () {
+        var meal = document.getElementById('meal-result');
+        meal.classList.remove('show');
+        void meal.offsetWidth;
+        meal.classList.add('show');
+      });
+
+      var tabs = document.querySelectorAll('.tab-bar .tab[data-panel]');
+      var panels = {
+        today: document.getElementById('panel-today'),
+        fridge: document.getElementById('panel-fridge')
+      };
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var id = tab.getAttribute('data-panel');
+          tabs.forEach(function (t) {
+            t.classList.toggle('active', t === tab);
+            t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+          });
+          Object.keys(panels).forEach(function (key) {
+            var on = key === id;
+            panels[key].classList.toggle('active', on);
+            panels[key].hidden = !on;
+          });
+        });
+      });
+
+      document.querySelectorAll('.cats .cat').forEach(function (cat) {
+        cat.addEventListener('click', function () {
+          document.querySelectorAll('.cats .cat').forEach(function (c) { c.classList.remove('active'); });
+          cat.classList.add('active');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

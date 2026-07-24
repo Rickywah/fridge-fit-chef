@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/run-smoke.ps1",
+        "matcher": "web/fridge-fit-chef\\.html|tests/"
+      }
+    ]
+  }
+}
