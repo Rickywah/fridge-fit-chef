@@ -44,7 +44,11 @@ $checks = @(
   @{ name = "servingScale chips helper"; pattern = "function servingScaleChipsHtml" },
   @{ name = "scaled deduct"; pattern = "function deductInventoryFromPlan\(meals,\s*scale\)" },
   @{ name = "scale warn copy"; pattern = "当前份量库存不足" },
-  @{ name = "nutrition disclaimer"; pattern = "营养为饮食规划估算，非医疗用途" }
+  @{ name = "nutrition disclaimer"; pattern = "营养为饮食规划估算，非医疗用途" },
+  @{ name = "calcBmr"; pattern = "function calcBmr" },
+  @{ name = "calcTdee"; pattern = "function calcTdee" },
+  @{ name = "GOAL_META"; pattern = "var GOAL_META" },
+  @{ name = "goal cut ratio"; pattern = "cut:\s*\{[^}]*ratio:\s*0\.8" }
 )
 $failed = 0
 foreach ($c in $checks) {

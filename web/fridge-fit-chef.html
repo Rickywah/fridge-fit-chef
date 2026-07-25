@@ -1539,9 +1539,27 @@
     }
 
     var MACRO_RATIOS = {
-      rest:   { protein: 1.85, fat: 0.93, carb: 4.1, label: '休息日', emoji: '😴' },
-      medium: { protein: 2.0,  fat: 1.0,  carb: 4.7, label: '常规训练日', emoji: '💪' },
-      high:   { protein: 2.2,  fat: 1.07, carb: 5.3, label: '高强度训练日', emoji: '🔥' }
+      rest:   { label: '休息日', emoji: '😴' },
+      medium: { label: '常规训练日', emoji: '💪' },
+      high:   { label: '高强度训练日', emoji: '🔥' }
+    };
+
+    var GOAL_META = {
+      cut: { label: '减脂', ratio: 0.80 },
+      maintain: { label: '维持', ratio: 1.00 },
+      bulk: { label: '增肌', ratio: 1.10 }
+    };
+
+    var ACTIVITY_FACTOR = {
+      rest: 1.375,
+      medium: 1.55,
+      high: 1.725
+    };
+
+    var PROTEIN_PER_KG = {
+      cut: { rest: 2.0, medium: 2.2, high: 2.4 },
+      maintain: { rest: 1.85, medium: 2.0, high: 2.2 },
+      bulk: { rest: 1.85, medium: 2.0, high: 2.2 }
     };
 
     function applyActivityTheme(key) {
@@ -2202,23 +2220,70 @@
     }
 
     // ─── Nutrition ───
-    function calcDailyTargets(s) {
-      var ratios = MACRO_RATIOS[s.activityToday] || MACRO_RATIOS.medium;
+    function calcBmr(s) {
       var w = s.weight || 70;
-      var protein = Math.round(w * ratios.protein);
-      var fat = Math.round(w * ratios.fat);
-      var carb = Math.round(w * ratios.carb);
+      var h = s.height || 175;
+      var age = s.age || 30;
+      var base = 10 * w + 6.25 * h - 5 * age;
+      if (s.gender === 'female') return Math.round(base - 161);
+      return Math.round(base + 5);
+    }
+
+    function calcTdee(s) {
+      var activity = s.activityToday || 'medium';
+      var factor = ACTIVITY_FACTOR[activity] != null ? ACTIVITY_FACTOR[activity] : ACTIVITY_FACTOR.medium;
+      return Math.round(calcBmr(s) * factor);
+    }
+
+    function calcDailyTargets(s) {
+      var goal = s.goal || 'maintain';
+      if (!GOAL_META[goal]) goal = 'maintain';
+      var activity = s.activityToday || 'medium';
+      if (!ACTIVITY_FACTOR[activity]) activity = 'medium';
+      var actMeta = MACRO_RATIOS[activity] || MACRO_RATIOS.medium;
+      var goalMeta = GOAL_META[goal];
+      var w = s.weight || 70;
+      var bmr = calcBmr(s);
+      var tdee = calcTdee(s);
+      var targetKcal = Math.max(
+        Math.round(tdee * goalMeta.ratio),
+        Math.round(bmr * 1.1)
+      );
+      var proteinPerKg = PROTEIN_PER_KG[goal][activity];
+      var protein = Math.round(w * proteinPerKg);
+      var fatPerKg = 0.9;
+      var fat = Math.round(w * fatPerKg);
+      var carb = Math.round((targetKcal - protein * 4 - fat * 9) / 4);
+      var carbFloor = Math.round(w * 2);
+      if (carb < carbFloor) {
+        fatPerKg = 0.7;
+        fat = Math.round(w * fatPerKg);
+        carb = Math.round((targetKcal - protein * 4 - fat * 9) / 4);
+        if (carb < carbFloor) carb = carbFloor;
+      }
       var kcal = protein * 4 + carb * 4 + fat * 9;
       return {
-        protein: protein, carb: carb, fat: fat, kcal: kcal,
-        ratios: ratios, label: ratios.label
+        protein: protein,
+        carb: carb,
+        fat: fat,
+        kcal: kcal,
+        bmr: bmr,
+        tdee: tdee,
+        targetKcal: targetKcal,
+        goal: goal,
+        goalLabel: goalMeta.label,
+        activityToday: activity,
+        label: actMeta.label,
+        emoji: actMeta.emoji,
+        ratios: { protein: proteinPerKg, fat: fatPerKg, carb: carb / w }
       };
     }
 
     function formatTargets(t) {
-      var r = t.ratios;
-      return t.label + '目标：蛋白质 ' + t.protein + 'g（' + r.protein + 'g/kg）· 碳水 ' +
-        t.carb + 'g（' + r.carb + 'g/kg）· 脂肪 ' + t.fat + 'g（' + r.fat + 'g/kg）· 约 ' + t.kcal + ' kcal';
+      return t.goalLabel + ' · ' + t.label +
+        ' · BMR ' + t.bmr + ' · TDEE ' + t.tdee +
+        ' · 目标 ' + t.targetKcal + ' kcal · P ' + t.protein +
+        'g · C ' + t.carb + 'g · F ' + t.fat + 'g';
     }
 
     function mealTargets(daily, ratio) {
