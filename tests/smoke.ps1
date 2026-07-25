@@ -1,9 +1,9 @@
-# Smoke checks for web/fridge-fit-chef.html (no Node required)
+﻿# Smoke checks for web/fridge-fit-chef.html (no Node required)
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $html = Join-Path $root "web\fridge-fit-chef.html"
 if (-not (Test-Path $html)) { Write-Error "Missing web/fridge-fit-chef.html"; exit 1 }
-$content = Get-Content $html -Raw -Encoding Default
+$content = Get-Content $html -Raw -Encoding UTF8
 $checks = @(
   @{ name = "buildMealPlan"; pattern = "function buildMealPlan" },
   @{ name = "buildAdHocMeal"; pattern = "function buildAdHocMeal" },
@@ -39,7 +39,12 @@ $checks = @(
   @{ name = "getFoodNutrition100"; pattern = "function getFoodNutrition100" },
   @{ name = "calcRecipeNutrition scale"; pattern = "function calcRecipeNutrition\(recipe,\s*scale\)" },
   @{ name = "estimated badge"; pattern = "含估算项" },
-  @{ name = "custom food p100 input"; pattern = "cf-p100" }
+  @{ name = "custom food p100 input"; pattern = "cf-p100" },
+  @{ name = "servingScale state"; pattern = "servingScale" },
+  @{ name = "servingScale chips helper"; pattern = "function servingScaleChipsHtml" },
+  @{ name = "scaled deduct"; pattern = "function deductInventoryFromPlan\(meals,\s*scale\)" },
+  @{ name = "scale warn copy"; pattern = "当前份量库存不足" },
+  @{ name = "nutrition disclaimer"; pattern = "营养为饮食规划估算，非医疗用途" }
 )
 $failed = 0
 foreach ($c in $checks) {

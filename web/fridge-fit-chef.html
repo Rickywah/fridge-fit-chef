@@ -282,6 +282,11 @@
     .btn-row { display: flex; gap: var(--spacing-8); margin-top: var(--spacing-12); }
     .btn-row .btn { flex: 1; }
 
+    .serving-scale { margin: 12px 0 8px; }
+    .serving-scale .chip { min-width: 0; flex: 1; }
+    .scale-warn { font-size: var(--text-caption); color: var(--cta); margin: 6px 0; }
+    .nutrition-disclaimer { font-size: var(--text-caption); color: var(--color-sage-gray); margin-top: 8px; }
+
     .chip-group { display: flex; gap: var(--spacing-8); flex-wrap: wrap; margin-bottom: var(--spacing-4); }
     .chip {
       flex: 1; min-width: 96px; min-height: 52px;
@@ -1218,6 +1223,7 @@
         </div>
         <button class="btn btn-filled" id="btn-save-settings">保存设置</button>
         <div id="targets-settings" class="targets-summary hidden"></div>
+        <p class="nutrition-disclaimer">营养为饮食规划估算，非医疗用途</p>
       </div>
       <div class="mine-group-label">食材与菜谱库</div>
       <div class="mine-section card">
@@ -1738,6 +1744,8 @@
       justAdded: null,
       shopCart: [],
       shopSourceList: null,
+      servingScale: 1,
+      _servingRecId: null,
       _lastLocalSave: 0,
       _syncApplied: false
     };
@@ -2662,6 +2670,41 @@
       return ing.name + ' ' + ing.quantity + ing.unit;
     }
 
+    function scaleIngredients(ingredients, scale) {
+      return (ingredients || []).map(function (ing) {
+        return { name: ing.name, unit: ing.unit, quantity: ing.quantity * scale };
+      });
+    }
+
+    function servingScaleChipsHtml(active) {
+      var scales = [
+        { value: 0.5, label: '半份' },
+        { value: 1, label: '标准' },
+        { value: 1.5, label: '加量' }
+      ];
+      var chips = scales.map(function (s) {
+        var cls = (active === s.value || Number(active) === s.value) ? 'chip active' : 'chip';
+        return '<button type="button" class="' + cls + '" data-scale="' + s.value + '">' + s.label + '</button>';
+      }).join('');
+      return '<div class="chip-group serving-scale" role="group" aria-label="份量">' + chips + '</div>';
+    }
+
+    function canMakeRecipeAtScale(recipe, scale) {
+      var map = inventoryMap();
+      return (recipe.ingredients || []).every(function (ing) {
+        var key = resolveName(ing.name) + '|' + ing.unit;
+        return (map[key] || 0) >= ing.quantity * scale;
+      });
+    }
+
+    function canMakePlanAtScale(meals, scale) {
+      return (meals || []).every(function (meal) {
+        return (meal.combo && meal.combo.recipes || []).every(function (r) {
+          return canMakeRecipeAtScale(r, scale);
+        });
+      });
+    }
+
     function macroBarHtml(label, current, target, cls) {
       var pct = target > 0 ? Math.min(100, Math.round(current / target * 100)) : 0;
       return '<div class="macro-bar"><div class="macro-bar-label"><span>' + label + '</span><span>' +
@@ -2771,7 +2814,8 @@
       return list;
     }
 
-    function deductInventoryFromPlan(meals) {
+    function deductInventoryFromPlan(meals, scale) {
+      scale = scale == null ? 1 : scale;
       var allRecipes = [];
       meals.forEach(function (m) {
         m.combo.recipes.forEach(function (r) { allRecipes.push(r); });
@@ -2782,8 +2826,9 @@
         recipe.ingredients.forEach(function (ing) {
           var n = resolveName(ing.name);
           var key = n + '|' + ing.unit;
-          if ((map[key] || 0) < ing.quantity) {
-            insufficient.push(ing.name + ' ' + ing.quantity + ing.unit);
+          var need = ing.quantity * scale;
+          if ((map[key] || 0) < need) {
+            insufficient.push(ing.name + ' ' + need + ing.unit);
           }
         });
       });
@@ -2794,7 +2839,7 @@
       allRecipes.forEach(function (recipe) {
         recipe.ingredients.forEach(function (ing) {
           var n = resolveName(ing.name);
-          var remaining = ing.quantity;
+          var remaining = ing.quantity * scale;
           state.inventory = state.inventory.filter(function (item) {
             if (remaining <= 0) return true;
             if (resolveName(item.name) === n && item.unit === ing.unit) {
@@ -2803,7 +2848,9 @@
                 return false;
               }
               item.quantity -= remaining;
+              if (item.quantity < 1e-6) item.quantity = 0;
               remaining = 0;
+              return item.quantity > 0;
             }
             return true;
           });
@@ -3240,12 +3287,17 @@
       });
     }
 
-    function openRecipeDetail(recipe) {
-      var nut = calcRecipeNutrition(recipe);
+    var detailServingScale = 1;
+    var detailRecipeRef = null;
+
+    function renderDetailBody(recipe, scale) {
+      var nut = calcRecipeNutrition(recipe, scale);
+      var scaledIngs = scaleIngredients(recipe.ingredients, scale);
       var html =
         '<div class="sheet-hero"><div class="food-circle" style="font-size:2.5rem">' +
         safeText(RECIPE_EMOJI[recipe.category] || '🍽') + '</div>' +
         '<h3>' + safeText(recipe.name) + '</h3>' +
+        servingScaleChipsHtml(scale) +
         '<div class="nutrition-bar" style="justify-content:center;margin-top:10px">' +
         '<span class="p">P ' + nut.protein + 'g</span><span class="c">C ' + nut.carb + 'g</span>' +
         '<span class="f">F ' + nut.fat + 'g</span><span>~' + nut.kcal + 'kcal</span>' +
@@ -3254,16 +3306,27 @@
         '<button class="sheet-tab" data-tab="ings">食材</button></div>' +
         '<div id="sheet-tab-content"><ol class="steps">' +
         splitSteps(recipe.steps).map(function (s) { return '<li>' + safeText(s) + '</li>'; }).join('') +
-        '</ol></div>';
-      openSheet(html);
-      var tabs = $$('.sheet-tab');
+        '</ol></div>' +
+        '<p class="nutrition-disclaimer">营养为饮食规划估算，非医疗用途</p>';
+      $('#sheet-content').innerHTML = html;
+      bindDetailSheetHandlers(recipe, scale, scaledIngs);
+    }
+
+    function bindDetailSheetHandlers(recipe, scale, scaledIngs) {
+      $$('#sheet-content .serving-scale .chip').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          detailServingScale = parseFloat(btn.dataset.scale);
+          renderDetailBody(recipe, detailServingScale);
+        });
+      });
+      var tabs = $$('#sheet-content .sheet-tab');
       tabs.forEach(function (tab) {
         tab.addEventListener('click', function () {
           tabs.forEach(function (t) { t.classList.remove('active'); });
           tab.classList.add('active');
           if (tab.dataset.tab === 'ings') {
             $('#sheet-tab-content').innerHTML = '<ul class="ing-list">' +
-              recipe.ingredients.map(function (ing) {
+              scaledIngs.map(function (ing) {
                 return '<li>' + safeText(formatIngLine(ing)) + '</li>';
               }).join('') + '</ul>';
           } else {
@@ -3272,6 +3335,13 @@
           }
         });
       });
+    }
+
+    function openRecipeDetail(recipe) {
+      detailRecipeRef = recipe;
+      detailServingScale = 1;
+      openSheet('');
+      renderDetailBody(recipe, detailServingScale);
     }
 
     function renderMinePanel() {
@@ -3684,23 +3754,93 @@
       noBlock.classList.add('hidden');
       container.classList.remove('hidden');
 
+      if (rec.id !== state._servingRecId) {
+        state.servingScale = 1;
+        state._servingRecId = rec.id;
+      }
+      var scale = state.servingScale;
       var isAdHoc = rec.isAdHoc === true;
+      var planOk = canMakePlanAtScale(rec.meals, scale);
+
+      var displayNut = { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false };
+      var mealDisplayNuts = [];
+      rec.meals.forEach(function (meal) {
+        var mealNut;
+        if (isAdHoc) {
+          var total = { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false };
+          meal.combo.recipes.forEach(function (recipe) {
+            (recipe.ingredients || []).forEach(function (ing) {
+              var n = estimateItemNutrition({
+                name: ing.name,
+                unit: ing.unit,
+                quantity: ing.quantity * scale,
+                gramsPerUnit: getItemGramsPerUnit(ing)
+              });
+              total.protein += n.protein;
+              total.carb += n.carb;
+              total.fat += n.fat;
+              total.kcal += n.kcal;
+              total.estimated = total.estimated || n.estimated;
+            });
+          });
+          total.fat += 5.5 * scale;
+          total.kcal += Math.round(5.5 * 9 * scale);
+          mealNut = roundNut(total);
+          mealNut.kcal = Math.round(total.kcal);
+          mealNut.estimated = total.estimated;
+        } else {
+          mealNut = { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false };
+          meal.combo.recipes.forEach(function (r) {
+            var n = calcRecipeNutrition(r, scale);
+            mealNut.protein += n.protein;
+            mealNut.carb += n.carb;
+            mealNut.fat += n.fat;
+            mealNut.kcal += n.kcal;
+            mealNut.estimated = mealNut.estimated || n.estimated;
+          });
+          mealNut = roundNut(mealNut);
+          mealNut.kcal = Math.round(
+            meal.combo.recipes.reduce(function (sum, r) {
+              return sum + calcRecipeNutrition(r, scale).kcal;
+            }, 0)
+          );
+          mealNut.estimated = meal.combo.recipes.some(function (r) {
+            return calcRecipeNutrition(r, scale).estimated;
+          });
+        }
+        mealDisplayNuts.push(mealNut);
+        displayNut.protein += mealNut.protein;
+        displayNut.carb += mealNut.carb;
+        displayNut.fat += mealNut.fat;
+        displayNut.kcal += mealNut.kcal;
+        displayNut.estimated = displayNut.estimated || mealNut.estimated;
+      });
+      displayNut = roundNut(displayNut);
+      displayNut.kcal = Math.round(mealDisplayNuts.reduce(function (s, n) { return s + n.kcal; }, 0));
+      displayNut.estimated = mealDisplayNuts.some(function (n) { return n.estimated; });
+      var displayKcal = displayNut.kcal;
+
       var html = '<div class="card recipe-card' + (isAdHoc ? ' ad-hoc-card' : '') + '">';
       html += '<div class="result-kicker">' + (isAdHoc ? '库存自由组合' : '可直接开做') + '</div>';
       html += '<div class="meal-summary"><div class="meal-name">这顿吃什么' +
         (isAdHoc ? '<span class="ad-hoc-badge">临时组合</span>' : '') + '</div>' +
-        '<div class="meal-score">约 ' + (rec.kcal || rec.targets.kcal) + ' kcal</div></div>';
+        '<div class="meal-score">约 ' + displayKcal + ' kcal</div></div>';
+      html += servingScaleChipsHtml(scale);
+      if (!planOk) {
+        html += '<p class="scale-warn">当前份量库存不足</p>';
+      }
 
-      rec.meals.forEach(function (meal) {
+      rec.meals.forEach(function (meal, mi) {
+        var mealNut = mealDisplayNuts[mi];
         html += '<div class="meal-slot">';
         if (!isAdHoc) {
-          html += '<div class="meal-slot-title">约 ' + meal.kcal + ' kcal</div>';
+          html += '<div class="meal-slot-title">约 ' + mealNut.kcal + ' kcal</div>';
         }
         meal.combo.recipes.forEach(function (recipe) {
           html += '<div class="recipe-part"><h3>' + safeText(recipe.name) +
             (recipe.category ? '<span class="cat-tag">' + safeText(recipe.category) + '</span>' : '') + '</h3>';
           html += '<ul class="ing-list">';
-          recipe.ingredients.forEach(function (ing) {
+          scaleIngredients(recipe.ingredients, scale).forEach(function (ing) {
             html += '<li>' + safeText(formatIngLine(ing)) + '</li>';
           });
           html += '</ul><ol class="steps">';
@@ -3709,31 +3849,24 @@
           });
           html += '</ol></div>';
         });
-        if (isAdHoc && rec.nutritionRange) {
-          html += '<div class="nutrition-range">' + formatNutRange(rec.nutritionRange) +
-            ' <span class="estimated-badge">含估算项</span></div>';
-        } else {
-          html += '<div class="nutrition-bar">';
-          html += '<span class="p">P ' + meal.nutrition.protein + 'g</span>';
-          html += '<span class="c">C ' + meal.nutrition.carb + 'g</span>';
-          html += '<span class="f">F ' + meal.nutrition.fat + 'g</span>';
-          if (isAdHoc) html += '<span class="kcal">约 ' + meal.kcal + ' kcal</span>';
-          if (meal.nutrition.estimated || rec.estimated) html += '<span class="estimated-badge">含估算项</span>';
-          html += '</div>';
-        }
+        html += '<div class="nutrition-bar">';
+        html += '<span class="p">P ' + mealNut.protein + 'g</span>';
+        html += '<span class="c">C ' + mealNut.carb + 'g</span>';
+        html += '<span class="f">F ' + mealNut.fat + 'g</span>';
+        if (isAdHoc) html += '<span class="kcal">约 ' + mealNut.kcal + ' kcal</span>';
+        if (mealNut.estimated) html += '<span class="estimated-badge">含估算项</span>';
+        html += '</div>';
         html += '</div>';
       });
 
       html += '<div class="day-total"><strong>本餐 vs 目标</strong>';
-      if (isAdHoc && rec.nutritionRange) {
-        html += '<p class="nutrition-range" style="margin-bottom:10px">' + formatNutRange(rec.nutritionRange) +
-          ' <span class="estimated-badge">含估算项</span></p>';
-        html += '<p class="adhoc-disclaimer">临时组合 · 营养为估算区间，仅供参考，不作为精确计划</p>';
-      } else {
-        html += macroRingsHtml(rec.nutrition, rec.targets);
-        html += '<div class="macro-bar-label" style="margin-top:4px"><span>热量</span><span>约 ' +
-          rec.kcal + ' / ' + rec.targets.kcal + ' kcal</span></div>';
+      html += macroRingsHtml(displayNut, rec.targets);
+      html += '<div class="macro-bar-label" style="margin-top:4px"><span>热量</span><span>约 ' +
+        displayKcal + ' / ' + rec.targets.kcal + ' kcal</span></div>';
+      if (isAdHoc) {
+        html += '<p class="adhoc-disclaimer">临时组合 · 营养为估算，仅供参考，不作为精确计划</p>';
       }
+      html += '<p class="nutrition-disclaimer">营养为饮食规划估算，非医疗用途</p>';
       html += '</div>';
 
       rec.gapTips.forEach(function (tip) {
@@ -3745,11 +3878,18 @@
       if (isAdHoc) {
         html += '<button class="btn btn-secondary" id="btn-save-adhoc">存为菜谱</button>';
       }
-      html += '<button class="btn btn-primary" id="btn-done">标记这顿已完成</button>';
+      html += '<button class="btn btn-primary" id="btn-done"' + (planOk ? '' : ' disabled') + '>标记这顿已完成</button>';
       html += '</div></div>';
 
       container.innerHTML = html;
       animateMacroRings(container);
+
+      $$('#recommend-result .serving-scale .chip').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          state.servingScale = parseFloat(btn.dataset.scale);
+          renderRecommendResult(state.currentRecommendation);
+        });
+      });
 
       $('#btn-shuffle').addEventListener('click', function () {
         var currentId = state.currentRecommendation.id;
@@ -3781,20 +3921,24 @@
         });
       }
 
-      $('#btn-done').addEventListener('click', function () {
-        var result = deductInventoryFromPlan(state.currentRecommendation.meals);
-        if (!result.ok) {
-          toast(result.msg);
-          return;
-        }
-        toast('这顿食材已扣减，做得好！');
-        state.currentRecommendation = null;
-        state.excludeIds = [];
-        saveExclude();
-        container.classList.add('hidden');
-        container.innerHTML = '';
-        renderInventory();
-      });
+      var doneBtn = $('#btn-done');
+      if (doneBtn) {
+        doneBtn.addEventListener('click', function () {
+          if (doneBtn.disabled) return;
+          var result = deductInventoryFromPlan(state.currentRecommendation.meals, state.servingScale);
+          if (!result.ok) {
+            toast(result.msg);
+            return;
+          }
+          toast('这顿食材已扣减，做得好！');
+          state.currentRecommendation = null;
+          state.excludeIds = [];
+          saveExclude();
+          container.classList.add('hidden');
+          container.innerHTML = '';
+          renderInventory();
+        });
+      }
     }
 
     function shopCartIndexOf(idx) {
