@@ -58,7 +58,13 @@ $checks = @(
   @{ name = "whey default 21"; pattern = "proteinPerServing:\s*21" },
   @{ name = "supplement-card"; pattern = 'id="supplement-card"' },
   @{ name = "supplement badge copy"; pattern = "已计入蛋白粉" },
-  @{ name = "mine-supplements"; pattern = 'id="mine-supplements"' }
+  @{ name = "mine-supplements"; pattern = 'id="mine-supplements"' },
+  @{ name = "choy sum"; pattern = "name: '菜心'" },
+  @{ name = "sea bass food"; pattern = "name: '鲈鱼'" },
+  @{ name = "pork ribs"; pattern = "name: '排骨'" },
+  @{ name = "shanghai bok choy"; pattern = "name: '上海青'" },
+  @{ name = "grass carp"; pattern = "name: '草鱼'" },
+  @{ name = "beef brisket"; pattern = "name: '牛腩'" }
 )
 $failed = 0
 foreach ($c in $checks) {
@@ -73,7 +79,8 @@ $negativeChecks = @(
   @{ name = "no disabled zoom"; pattern = "user-scalable=no" },
   @{ name = "no gradient clipped headings"; pattern = "background-clip:\s*text" },
   @{ name = "no meal side stripe"; pattern = "border-left:\s*4px\s+solid\s+var\(--accent\)" },
-  @{ name = "localized fridge section"; pattern = ">Popular<" }
+  @{ name = "localized fridge section"; pattern = ">Popular<" },
+  @{ name = "no bass-as-basa alias"; pattern = "'鲈鱼'\s*:\s*'巴沙鱼柳'" }
 )
 foreach ($c in $negativeChecks) {
   if ($content -match $c.pattern) {
