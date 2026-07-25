@@ -35,7 +35,11 @@ $checks = @(
   @{ name = "nutrition100 field"; pattern = "nutrition100" },
   @{ name = "nutrition data version"; pattern = "NUTRITION_DATA_VERSION" },
   @{ name = "skinned chicken leg"; pattern = "带皮鸡腿肉" },
-  @{ name = "fatty beef"; pattern = "肥牛片" }
+  @{ name = "fatty beef"; pattern = "肥牛片" },
+  @{ name = "getFoodNutrition100"; pattern = "function getFoodNutrition100" },
+  @{ name = "calcRecipeNutrition scale"; pattern = "function calcRecipeNutrition\(recipe,\s*scale\)" },
+  @{ name = "estimated badge"; pattern = "含估算项" },
+  @{ name = "custom food p100 input"; pattern = "cf-p100" }
 )
 $failed = 0
 foreach ($c in $checks) {

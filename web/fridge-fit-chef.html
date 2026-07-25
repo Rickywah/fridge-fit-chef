@@ -1069,6 +1069,15 @@
       font-weight: var(--font-weight-medium);
       margin-left: var(--spacing-8);
     }
+    .estimated-badge {
+      display: inline-block; font-size: 11px; padding: 1px 7px;
+      border-radius: var(--radius-pill);
+      background: var(--color-soft-linen);
+      border: 1px solid var(--color-warm-mist);
+      color: var(--color-olive-char);
+      font-weight: var(--font-weight-medium);
+      margin-left: var(--spacing-8);
+    }
     .nutrition-range { font-size: var(--text-caption); color: var(--color-sage-gray); margin: var(--spacing-8) 0; line-height: 1.6; }
     .adhoc-disclaimer {
       font-size: var(--text-caption); color: var(--color-olive-char);
@@ -2216,15 +2225,62 @@
       return 1;
     }
 
-    function calcRecipeNutrition(recipe) {
-      if (recipe.nutrition) {
+    function getFoodNutrition100(name, unit) {
+      var resolved = resolveName(name);
+      var entry = FOOD_DB.find(function (f) { return f.name === resolved && f.unit === unit; }) ||
+        FOOD_DB.find(function (f) { return f.name === resolved; });
+      if (entry && entry.nutrition100) {
         return {
-          protein: recipe.nutrition.protein,
-          carb: recipe.nutrition.carb,
-          fat: recipe.nutrition.fat
+          protein: entry.nutrition100.protein,
+          carb: entry.nutrition100.carb,
+          fat: entry.nutrition100.fat,
+          kcal: entry.nutrition100.kcal,
+          estimated: false
         };
       }
-      return { protein: 0, carb: 0, fat: 0 };
+      var cf = findCustomFood(resolved, unit);
+      if (cf && cf.p100 != null) {
+        var p = cf.p100, c = cf.c100 || 0, ft = cf.f100 || 0;
+        return {
+          protein: p, carb: c, fat: ft,
+          kcal: cf.kcal100 != null ? cf.kcal100 : Math.round(p * 4 + c * 4 + ft * 9),
+          estimated: false
+        };
+      }
+      var cat = getFoodCat(resolved, unit);
+      var catNut = getCatNutrition(cat, null);
+      return {
+        protein: catNut.protein, carb: catNut.carb, fat: catNut.fat,
+        kcal: Math.round(catNut.protein * 4 + catNut.carb * 4 + catNut.fat * 9),
+        estimated: true
+      };
+    }
+
+    function calcRecipeNutrition(recipe, scale) {
+      scale = scale == null ? 1 : scale;
+      if (recipe.ingredients && recipe.ingredients.length) {
+        var total = recipe.ingredients.reduce(function (acc, ing) {
+          var n = estimateItemNutrition({ name: ing.name, unit: ing.unit, quantity: ing.quantity * scale });
+          return {
+            protein: acc.protein + n.protein,
+            carb: acc.carb + n.carb,
+            fat: acc.fat + n.fat,
+            kcal: acc.kcal + n.kcal,
+            estimated: acc.estimated || n.estimated
+          };
+        }, { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false });
+        var result = roundNut(total);
+        result.kcal = Math.round(total.kcal);
+        result.estimated = total.estimated;
+        return result;
+      }
+      if (recipe.nutrition) {
+        var rn = roundNut(recipe.nutrition);
+        rn.kcal = nutKcal(recipe.nutrition);
+        rn.estimated = true;
+        return rn;
+      }
+      return { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false };
     }
 
     function roundNut(n) {
@@ -2284,14 +2340,20 @@
     }
 
     function sumNutritionRecipes(recipes) {
-      return roundNut(recipes.reduce(function (acc, r) {
+      var total = recipes.reduce(function (acc, r) {
         var n = calcRecipeNutrition(r);
         return {
           protein: acc.protein + n.protein,
           carb: acc.carb + n.carb,
-          fat: acc.fat + n.fat
+          fat: acc.fat + n.fat,
+          kcal: acc.kcal + n.kcal,
+          estimated: acc.estimated || n.estimated
         };
-      }, { protein: 0, carb: 0, fat: 0 }));
+      }, { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false });
+      var result = roundNut(total);
+      result.kcal = Math.round(total.kcal);
+      result.estimated = total.estimated;
+      return result;
     }
 
     function mealComboId(staple, main, side) {
@@ -2328,7 +2390,7 @@
 
     function scoreMealCombo(combo, slotTargets) {
       var nut = sumNutritionRecipes(combo.recipes);
-      var kcal = nutKcal(nut);
+      var kcal = nut.kcal;
       var diff = Math.abs(nut.protein - slotTargets.protein) +
         Math.abs(nut.carb - slotTargets.carb) * 0.5 +
         Math.abs(nut.fat - slotTargets.fat) * 0.5;
@@ -2418,15 +2480,15 @@
     }
 
     function estimateItemNutrition(item) {
-      var cat = getFoodCat(item.name, item.unit);
-      var cf = findCustomFood(item.name, item.unit);
-      var per100 = getCatNutrition(cat, cf);
+      var per100 = getFoodNutrition100(item.name, item.unit);
       var grams = item.quantity * getItemGramsPerUnit(item);
       var factor = grams / 100;
       return {
         protein: per100.protein * factor,
         carb: per100.carb * factor,
-        fat: per100.fat * factor
+        fat: per100.fat * factor,
+        kcal: per100.kcal * factor,
+        estimated: per100.estimated
       };
     }
 
@@ -2536,15 +2598,28 @@
         steps: steps,
         isAdHoc: true
       };
-      var nutRange = estimateMealNutritionRange(
-        picked.map(function (i) { return { name: i.name, unit: i.unit, quantity: 1, gramsPerUnit: getItemGramsPerUnit(i) }; }),
-        true
-      );
-      var midNut = roundNut({
-        protein: (nutRange.protein[0] + nutRange.protein[1]) / 2,
-        carb: (nutRange.carb[0] + nutRange.carb[1]) / 2,
-        fat: (nutRange.fat[0] + nutRange.fat[1]) / 2
+      var itemsForNut = picked.map(function (i) {
+        return { name: i.name, unit: i.unit, quantity: 1, gramsPerUnit: getItemGramsPerUnit(i) };
       });
+      var hasProteinMain = true;
+      var total = itemsForNut.reduce(function (acc, item) {
+        var n = estimateItemNutrition(item);
+        return {
+          protein: acc.protein + n.protein,
+          carb: acc.carb + n.carb,
+          fat: acc.fat + n.fat,
+          kcal: acc.kcal + n.kcal,
+          estimated: acc.estimated || n.estimated
+        };
+      }, { protein: 0, carb: 0, fat: 0, kcal: 0, estimated: false });
+      if (hasProteinMain) {
+        total.fat += 5.5;
+        total.kcal += Math.round(5.5 * 9);
+      }
+      var midNut = roundNut(total);
+      midNut.kcal = Math.round(total.kcal);
+      midNut.estimated = total.estimated;
+      var nutRange = total.estimated ? estimateMealNutritionRange(itemsForNut, hasProteinMain) : null;
       var combo = { id: comboId, recipes: [recipe], staple: null, main: recipe, side: null };
       return {
         success: true,
@@ -2554,15 +2629,15 @@
           slot: MEAL_SLOT,
           combo: combo,
           nutrition: midNut,
-          kcal: nutKcal(midNut),
+          kcal: midNut.kcal,
           nutritionRange: nutRange
         }],
         nutrition: midNut,
         nutritionRange: nutRange,
-        kcal: nutKcal(midNut),
-        kcalRange: nutRange.kcal,
+        kcal: midNut.kcal,
+        kcalRange: nutRange ? nutRange.kcal : null,
         targets: targets,
-        gapTips: analyzeMealGapRange(nutRange, targets),
+        gapTips: nutRange ? analyzeMealGapRange(nutRange, targets) : analyzeMealGap(midNut, targets),
         adhocRecipe: recipe
       };
     }
@@ -2650,7 +2725,8 @@
           kcal: pick.kcal
         }],
         nutrition: nut,
-        kcal: nutKcal(nut),
+        kcal: nut.kcal,
+        estimated: nut.estimated,
         targets: targets,
         gapTips: analyzeMealGap(nut, targets)
       };
@@ -3153,7 +3229,8 @@
           '<div class="food-circle">' + (RECIPE_EMOJI[r.category] || '🍽') + '</div>' +
           '<div class="recipe-row-info"><div class="name">' + safeText(r.name) +
           (r.isCustom ? '<span class="cat-tag">我的</span>' : '') + '</div>' +
-          '<div class="meta">' + safeText(r.category) + ' · P' + nut.protein + 'g · ' + nutKcal(nut) + 'kcal</div></div></div>';
+          '<div class="meta">' + safeText(r.category) + ' · P' + nut.protein + 'g · 约 ' + nut.kcal + ' kcal' +
+          (nut.estimated ? ' · 含估算项' : '') + '</div></div></div>';
       }).join('') || '<div class="empty-state"><div class="icon">📖</div><p>暂无菜谱</p></div>';
       $('#recipe-list').querySelectorAll('.recipe-row').forEach(function (row) {
         row.addEventListener('click', function () {
@@ -3171,7 +3248,8 @@
         '<h3>' + safeText(recipe.name) + '</h3>' +
         '<div class="nutrition-bar" style="justify-content:center;margin-top:10px">' +
         '<span class="p">P ' + nut.protein + 'g</span><span class="c">C ' + nut.carb + 'g</span>' +
-        '<span class="f">F ' + nut.fat + 'g</span><span>~' + nutKcal(nut) + 'kcal</span></div></div>' +
+        '<span class="f">F ' + nut.fat + 'g</span><span>~' + nut.kcal + 'kcal</span>' +
+        (nut.estimated ? '<span class="estimated-badge">含估算项</span>' : '') + '</div></div>' +
         '<div class="sheet-tabs"><button class="sheet-tab active" data-tab="steps">做法</button>' +
         '<button class="sheet-tab" data-tab="ings">食材</button></div>' +
         '<div id="sheet-tab-content"><ol class="steps">' +
@@ -3282,6 +3360,10 @@
         }).join('') + '</select></div>' +
         '<div class="form-row"><div class="form-group"><label>单位</label><input type="text" id="cf-unit" value="' + safeAttr(f.unit || '个') + '"></div>' +
         '<div class="form-group"><label>每单位(g)</label><input type="number" id="cf-grams" value="' + (f.grams || 100) + '"></div></div>' +
+        '<div class="form-row"><div class="form-group"><label>蛋白质g/100g（选填）</label><input type="number" step="0.1" id="cf-p100" value="' + (f.p100 != null ? f.p100 : '') + '"></div>' +
+        '<div class="form-group"><label>碳水g/100g（选填）</label><input type="number" step="0.1" id="cf-c100" value="' + (f.c100 != null ? f.c100 : '') + '"></div></div>' +
+        '<div class="form-row"><div class="form-group"><label>脂肪g/100g（选填）</label><input type="number" step="0.1" id="cf-f100" value="' + (f.f100 != null ? f.f100 : '') + '"></div>' +
+        '<div class="form-group"><label>热量kcal/100g（选填）</label><input type="number" id="cf-kcal100" value="' + (f.kcal100 != null ? f.kcal100 : '') + '"></div></div>' +
         '<button class="btn btn-primary" id="cf-save">保存</button>'
       );
       $('#cf-save').addEventListener('click', function () {
@@ -3292,6 +3374,14 @@
           unit: $('#cf-unit').value.trim() || '个',
           grams: parseFloat($('#cf-grams').value) || 100
         };
+        var p100 = parseFloat($('#cf-p100').value);
+        var c100 = parseFloat($('#cf-c100').value);
+        var f100 = parseFloat($('#cf-f100').value);
+        var kcal100 = parseFloat($('#cf-kcal100').value);
+        if (!isNaN(p100)) data.p100 = p100;
+        if (!isNaN(c100)) data.c100 = c100;
+        if (!isNaN(f100)) data.f100 = f100;
+        if (!isNaN(kcal100)) data.kcal100 = kcal100;
         if (existing && existing.id) {
           var idx = state.customFoods.findIndex(function (x) { return x.id === f.id; });
           if (idx >= 0) state.customFoods[idx] = data;
@@ -3620,12 +3710,15 @@
           html += '</ol></div>';
         });
         if (isAdHoc && rec.nutritionRange) {
-          html += '<div class="nutrition-range">' + formatNutRange(rec.nutritionRange) + '</div>';
+          html += '<div class="nutrition-range">' + formatNutRange(rec.nutritionRange) +
+            ' <span class="estimated-badge">含估算项</span></div>';
         } else {
           html += '<div class="nutrition-bar">';
           html += '<span class="p">P ' + meal.nutrition.protein + 'g</span>';
           html += '<span class="c">C ' + meal.nutrition.carb + 'g</span>';
           html += '<span class="f">F ' + meal.nutrition.fat + 'g</span>';
+          if (isAdHoc) html += '<span class="kcal">约 ' + meal.kcal + ' kcal</span>';
+          if (meal.nutrition.estimated || rec.estimated) html += '<span class="estimated-badge">含估算项</span>';
           html += '</div>';
         }
         html += '</div>';
@@ -3633,7 +3726,8 @@
 
       html += '<div class="day-total"><strong>本餐 vs 目标</strong>';
       if (isAdHoc && rec.nutritionRange) {
-        html += '<p class="nutrition-range" style="margin-bottom:10px">' + formatNutRange(rec.nutritionRange) + '</p>';
+        html += '<p class="nutrition-range" style="margin-bottom:10px">' + formatNutRange(rec.nutritionRange) +
+          ' <span class="estimated-badge">含估算项</span></p>';
         html += '<p class="adhoc-disclaimer">临时组合 · 营养为估算区间，仅供参考，不作为精确计划</p>';
       } else {
         html += macroRingsHtml(rec.nutrition, rec.targets);
