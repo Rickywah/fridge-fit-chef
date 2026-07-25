@@ -48,7 +48,10 @@ $checks = @(
   @{ name = "calcBmr"; pattern = "function calcBmr" },
   @{ name = "calcTdee"; pattern = "function calcTdee" },
   @{ name = "GOAL_META"; pattern = "var GOAL_META" },
-  @{ name = "goal cut ratio"; pattern = "cut:\s*\{[^}]*ratio:\s*0\.8" }
+  @{ name = "goal cut ratio"; pattern = "cut:\s*\{[^}]*ratio:\s*0\.8" },
+  @{ name = "goal chips"; pattern = 'id="goal-chips"' },
+  @{ name = "data-goal cut"; pattern = 'data-goal="cut"' },
+  @{ name = "hero goal copy"; pattern = "目标 · 今日约" }
 )
 $failed = 0
 foreach ($c in $checks) {

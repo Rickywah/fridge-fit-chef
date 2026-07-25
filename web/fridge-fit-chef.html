@@ -1221,6 +1221,14 @@
             </div>
           </div>
         </div>
+        <div class="form-group" style="margin-top:12px">
+          <label>周期目标</label>
+          <div class="chip-group" id="goal-chips" role="group" aria-label="周期目标">
+            <button type="button" class="chip" data-goal="cut">减脂</button>
+            <button type="button" class="chip" data-goal="maintain">维持</button>
+            <button type="button" class="chip" data-goal="bulk">增肌</button>
+          </div>
+        </div>
         <button class="btn btn-filled" id="btn-save-settings">保存设置</button>
         <div id="targets-settings" class="targets-summary hidden"></div>
         <p class="nutrition-disclaimer">营养为饮食规划估算，非医疗用途</p>
@@ -2170,8 +2178,11 @@
 
     function loadState() {
       state.settings = loadJSON(STORAGE_KEYS.settings, {
-        weight: 70, height: 175, age: 30, gender: 'male', activityToday: 'medium'
+        weight: 70, height: 175, age: 30, gender: 'male', activityToday: 'medium', goal: 'maintain'
       });
+      if (!state.settings.goal || !GOAL_META[state.settings.goal]) {
+        state.settings.goal = 'maintain';
+      }
       state.inventory = loadJSON(STORAGE_KEYS.inventory, []);
       state.excludeIds = loadJSON(STORAGE_KEYS.exclude, []);
       state.customFoods = loadJSON(STORAGE_KEYS.customFoods, []);
@@ -3004,7 +3015,7 @@
       $('#today-hero').innerHTML =
         '<div class="hero-label">' + safeText(act.emoji + ' ' + act.label) + '</div>' +
         '<div class="hero-title">先看冰箱，再定这一顿</div>' +
-        '<p class="hero-copy">目标按当前训练状态自动折算，推荐只聚焦本餐，减少计划负担。</p>' +
+        '<p class="hero-copy">' + safeText(t.goalLabel + '目标 · 今日约 ' + t.kcal + ' kcal') + '</p>' +
         '<div class="hero-stats">' +
         '<div class="hero-stat"><strong>' + t.protein + 'g</strong>蛋白质</div>' +
         '<div class="hero-stat"><strong>' + t.carb + 'g</strong>碳水</div>' +
@@ -4233,6 +4244,10 @@
       $('#set-age').value = s.age;
       var gender = s.gender === 'female' ? 'female' : 'male';
       document.querySelector('input[name=gender][value="' + gender + '"]').checked = true;
+      var goal = s.goal || 'maintain';
+      $$('#goal-chips .chip').forEach(function (chip) {
+        chip.classList.toggle('active', chip.dataset.goal === goal);
+      });
       var targets = calcDailyTargets(s);
       var el = $('#targets-settings');
       el.textContent = formatTargets(targets);
@@ -4290,6 +4305,15 @@
         });
       });
 
+      $$('#goal-chips .chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          state.settings.goal = chip.dataset.goal || 'maintain';
+          saveSettings();
+          renderSettingsForm();
+          updateActivityChips();
+        });
+      });
+
       $('#btn-recommend').addEventListener('click', function () {
         if (state.inventory.length === 0) {
           toast('请先添加冰箱库存');
@@ -4309,6 +4333,9 @@
         state.settings.height = parseFloat($('#set-height').value) || 175;
         state.settings.age = parseInt($('#set-age').value, 10) || 30;
         state.settings.gender = document.querySelector('input[name=gender]:checked').value;
+        if (!state.settings.goal || !GOAL_META[state.settings.goal]) {
+          state.settings.goal = 'maintain';
+        }
         saveSettings();
         renderSettingsForm();
         updateActivityChips();
