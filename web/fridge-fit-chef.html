@@ -603,6 +603,35 @@
     }
     .shop-tray .btn-primary { width: 100%; }
 
+    .supp-row {
+      display: flex; align-items: center; gap: var(--spacing-8);
+      padding: var(--spacing-8) 0;
+      border-bottom: 1px solid var(--color-warm-mist);
+    }
+    .supp-row:last-child { border-bottom: none; }
+    .supp-info { flex: 1; min-width: 0; }
+    .supp-name { font-size: var(--text-body-sm); font-weight: var(--font-weight-semibold); color: var(--ink); }
+    .supp-meta { font-size: var(--text-caption); color: var(--color-sage-gray); margin-top: 2px; }
+    .supp-stepper {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--color-soft-linen); border-radius: var(--radius);
+      padding: 2px; flex-shrink: 0;
+    }
+    .supp-stepper button {
+      width: 32px; height: 32px; border: 1px solid var(--color-warm-mist);
+      border-radius: 6px; background: var(--color-paper-white); color: var(--ink);
+      cursor: pointer; font-size: 1.1rem; font-weight: var(--font-weight-bold);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .supp-stepper .supp-qty {
+      min-width: 32px; text-align: center;
+      font-weight: var(--font-weight-extrabold); color: var(--cta);
+    }
+    .supp-badge {
+      font-size: var(--text-caption); color: var(--color-olive-char);
+      margin: var(--spacing-8) 0 0;
+    }
+
     /* Full-width paper tab bar — readable labels */
     .tab-bar {
       position: fixed;
@@ -1147,6 +1176,11 @@
           <button class="chip" data-activity="medium" type="button"><span class="chip-emoji">💪</span>常规训练</button>
           <button class="chip" data-activity="high" type="button"><span class="chip-emoji">🔥</span>高强度</button>
         </div>
+      </div>
+      <div class="card" id="supplement-card">
+        <h2>蛋白粉</h2>
+        <div id="supplement-list"></div>
+        <p class="subtitle" id="supplement-summary"></p>
       </div>
       <div class="food-divider" aria-hidden="true">
         <svg viewBox="0 0 360 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3106,7 +3140,7 @@
         b.classList.toggle('active', active);
         b.setAttribute('aria-selected', active ? 'true' : 'false');
       });
-      if (tab === 'today') { renderTodayHero(); updateActivityChips(); }
+      if (tab === 'today') { renderTodayHero(); updateActivityChips(); renderSupplementCard(); }
       if (tab === 'inventory') renderFridgePage();
       if (tab === 'recipes') renderRecipeLibrary();
       if (tab === 'mine') { renderSettingsForm(); renderMinePanel(); }
@@ -3154,6 +3188,58 @@
         chip.classList.toggle('active', chip.dataset.activity === key);
       });
       renderTodayHero();
+      renderSupplementCard();
+    }
+
+    function renderSupplementCard() {
+      var listEl = $('#supplement-list');
+      var sumEl = $('#supplement-summary');
+      if (!listEl || !sumEl) return;
+      ensureSupplementLog();
+      if (!state.supplements || !state.supplements.length) {
+        state.supplements = mergeSupplements(null);
+      }
+      listEl.innerHTML = state.supplements.map(function (s) {
+        var servings = getSupplementServings(s.id);
+        return '<div class="supp-row" data-id="' + safeAttr(s.id) + '">' +
+          '<div class="supp-info"><div class="supp-name">' + safeText(s.name) + '</div>' +
+          '<div class="supp-meta">每份 ' + s.proteinPerServing + 'g 蛋白</div></div>' +
+          '<div class="supp-stepper">' +
+          '<button type="button" class="supp-minus" aria-label="减少">−</button>' +
+          '<span class="supp-qty">' + servings + '</span>' +
+          '<button type="button" class="supp-plus" aria-label="增加">+</button>' +
+          '</div></div>';
+      }).join('');
+      var total = Math.round(getTodaySupplementProtein());
+      sumEl.textContent = total > 0
+        ? ('今日补剂蛋白合计 ' + total + 'g · 这顿蛋白目标已扣')
+        : '今日未计蛋白粉';
+      listEl.querySelectorAll('.supp-row').forEach(function (row) {
+        var id = row.dataset.id;
+        row.querySelector('.supp-minus').addEventListener('click', function () {
+          setSupplementServings(id, getSupplementServings(id) - 0.5);
+          renderSupplementCard();
+          refreshRecommendTargetsFromSupplements();
+        });
+        row.querySelector('.supp-plus').addEventListener('click', function () {
+          setSupplementServings(id, getSupplementServings(id) + 0.5);
+          renderSupplementCard();
+          refreshRecommendTargetsFromSupplements();
+        });
+      });
+    }
+
+    function refreshRecommendTargetsFromSupplements() {
+      if (!state.currentRecommendation || !state.currentRecommendation.success) return;
+      var daily = calcDailyTargets(state.settings);
+      var targets = effectiveMealTargets(daily, MEAL_RATIO);
+      state.currentRecommendation.targets = targets;
+      state.currentRecommendation.supplementProtein = targets.supplementProtein || 0;
+      var nut = state.currentRecommendation.nutrition;
+      if (nut && !state.currentRecommendation.nutritionRange) {
+        state.currentRecommendation.gapTips = analyzeMealGap(nut, targets);
+      }
+      renderRecommendResult(state.currentRecommendation);
     }
 
     function renderCatChips(containerId, cats, active, attr) {
@@ -4104,6 +4190,10 @@
       html += macroRingsHtml(displayNut, rec.targets);
       html += '<div class="macro-bar-label" style="margin-top:4px"><span>热量</span><span>约 ' +
         displayKcal + ' / ' + rec.targets.kcal + ' kcal</span></div>';
+      var suppP = rec.supplementProtein != null ? rec.supplementProtein : Math.round(getTodaySupplementProtein());
+      if (suppP > 0) {
+        html += '<p class="supp-badge">已计入蛋白粉 −' + suppP + 'g</p>';
+      }
       if (isAdHoc) {
         html += '<p class="adhoc-disclaimer">临时组合 · 营养为估算，仅供参考，不作为精确计划</p>';
       }

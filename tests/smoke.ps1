@@ -55,7 +55,9 @@ $checks = @(
   @{ name = "SUPPLEMENT_SEED"; pattern = "SUPPLEMENT_SEED" },
   @{ name = "effectiveMealTargets"; pattern = "function effectiveMealTargets" },
   @{ name = "getTodaySupplementProtein"; pattern = "function getTodaySupplementProtein" },
-  @{ name = "whey default 21"; pattern = "proteinPerServing:\s*21" }
+  @{ name = "whey default 21"; pattern = "proteinPerServing:\s*21" },
+  @{ name = "supplement-card"; pattern = 'id="supplement-card"' },
+  @{ name = "supplement badge copy"; pattern = "已计入蛋白粉" }
 )
 $failed = 0
 foreach ($c in $checks) {
