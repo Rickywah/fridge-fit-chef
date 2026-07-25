@@ -1267,6 +1267,14 @@
         <div id="targets-settings" class="targets-summary hidden"></div>
         <p class="nutrition-disclaimer">营养为饮食规划估算，非医疗用途</p>
       </div>
+      <div class="mine-section card" id="mine-supplements">
+        <div class="section-head">
+          <span class="mine-section-title" style="margin:0">蛋白粉</span>
+          <button class="link-btn" id="btn-add-supplement" type="button">+ 添加</button>
+        </div>
+        <p class="subtitle" style="margin-bottom:12px">改每份蛋白克数；今天页登记「已喝」后会从这顿蛋白目标扣除。</p>
+        <div id="mine-supplement-list"></div>
+      </div>
       <div class="mine-group-label">食材与菜谱库</div>
       <div class="mine-section card">
         <div class="section-head"><span class="mine-section-title" style="margin:0">自定义食材</span>
@@ -3143,7 +3151,7 @@
       if (tab === 'today') { renderTodayHero(); updateActivityChips(); renderSupplementCard(); }
       if (tab === 'inventory') renderFridgePage();
       if (tab === 'recipes') renderRecipeLibrary();
-      if (tab === 'mine') { renderSettingsForm(); renderMinePanel(); }
+      if (tab === 'mine') { renderSettingsForm(); renderMinePanel(); renderMineSupplements(); }
     }
 
     function openSheet(html) {
@@ -3648,6 +3656,89 @@
       detailServingScale = 1;
       openSheet('');
       renderDetailBody(recipe, detailServingScale);
+    }
+
+    function renderMineSupplements() {
+      var el = $('#mine-supplement-list');
+      if (!el) return;
+      if (!state.supplements || !state.supplements.length) {
+        state.supplements = mergeSupplements(null);
+      }
+      el.innerHTML = state.supplements.map(function (s) {
+        return '<div class="custom-item" data-id="' + safeAttr(s.id) + '">' +
+          '<div class="custom-item-info">' + escapeHtml(s.name) +
+          '<small>每份 ' + s.proteinPerServing + 'g 蛋白' +
+          (s.isCustom ? ' · 自定义' : ' · 内置') + '</small></div>' +
+          '<div style="display:flex;gap:6px">' +
+          '<button class="btn btn-secondary btn-sm btn-edit-supp" data-id="' + safeAttr(s.id) + '" type="button">改</button>' +
+          (s.isCustom
+            ? '<button class="btn btn-danger btn-sm btn-del-supp" data-id="' + safeAttr(s.id) + '" type="button">删</button>'
+            : '') +
+          '</div></div>';
+      }).join('');
+      el.querySelectorAll('.btn-edit-supp').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var s = getSupplementById(btn.dataset.id);
+          if (s) openSupplementForm(s);
+        });
+      });
+      el.querySelectorAll('.btn-del-supp').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.dataset.id;
+          var s = getSupplementById(id);
+          if (!s || !s.isCustom) return;
+          state.supplements = state.supplements.filter(function (x) { return x.id !== id; });
+          var log = ensureSupplementLog();
+          log.intakes = (log.intakes || []).filter(function (r) { return r.id !== id; });
+          saveSupplements();
+          saveSupplementLog();
+          renderMineSupplements();
+          renderSupplementCard();
+          toast('已删除');
+        });
+      });
+    }
+
+    function openSupplementForm(existing) {
+      var s = existing && existing.id ? existing : {};
+      var isEdit = !!(existing && existing.id);
+      openSheet(
+        '<h3>' + (isEdit ? '编辑' : '添加') + '蛋白粉</h3>' +
+        '<div class="form-group"><label>名称</label><input type="text" id="sp-name" value="' +
+        safeAttr(s.name || '') + '"' + (s.id === 'whey-default' ? ' readonly' : '') + '></div>' +
+        '<div class="form-group"><label>每份蛋白 g</label><input type="number" id="sp-protein" min="1" max="80" step="0.5" value="' +
+        (s.proteinPerServing != null ? s.proteinPerServing : 21) + '"></div>' +
+        '<button class="btn btn-primary" id="sp-save" type="button">保存</button>'
+      );
+      $('#sp-save').addEventListener('click', function () {
+        var name = ($('#sp-name').value || '').trim();
+        var p = parseFloat($('#sp-protein').value);
+        if (!name) { toast('请输入名称'); return; }
+        if (!(p > 0)) { toast('请填写每份蛋白克数'); return; }
+        if (isEdit) {
+          var idx = state.supplements.findIndex(function (x) { return x.id === s.id; });
+          if (idx >= 0) {
+            state.supplements[idx].proteinPerServing = p;
+            if (state.supplements[idx].isCustom) state.supplements[idx].name = name;
+          }
+        } else {
+          state.supplements.push({
+            id: 'supp_' + uid(),
+            name: name,
+            kind: 'protein_powder',
+            proteinPerServing: p,
+            carbPerServing: 0,
+            fatPerServing: 0,
+            isCustom: true
+          });
+        }
+        saveSupplements();
+        closeSheet();
+        renderMineSupplements();
+        renderSupplementCard();
+        refreshRecommendTargetsFromSupplements();
+        toast('已保存');
+      });
     }
 
     function renderMinePanel() {
@@ -4558,6 +4649,7 @@
 
       $('#btn-manual-add').addEventListener('click', openManualAddSheet);
       $('#btn-add-custom-food').addEventListener('click', function () { openCustomFoodForm(); });
+      $('#btn-add-supplement').addEventListener('click', function () { openSupplementForm(); });
       $('#btn-add-custom-recipe').addEventListener('click', function () { openCustomRecipeForm(); });
       $('#btn-bulk-food').addEventListener('click', function () { openBulkImportSheet('foods'); });
       $('#btn-bulk-recipe').addEventListener('click', function () { openBulkImportSheet('recipes'); });
@@ -4649,6 +4741,7 @@
       renderTodayHero();
       updateActivityChips();
       renderSettingsForm();
+      renderMineSupplements();
       if (state.activeTab === 'mine') renderMinePanel();
     }
 
