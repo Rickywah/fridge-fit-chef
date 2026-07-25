@@ -2698,11 +2698,21 @@
     }
 
     function canMakePlanAtScale(meals, scale) {
-      return (meals || []).every(function (meal) {
-        return (meal.combo && meal.combo.recipes || []).every(function (r) {
-          return canMakeRecipeAtScale(r, scale);
-        });
-      });
+      var map = cloneMap(inventoryMap());
+      var mealsList = meals || [];
+      for (var mi = 0; mi < mealsList.length; mi++) {
+        var recipes = mealsList[mi].combo && mealsList[mi].combo.recipes || [];
+        for (var ri = 0; ri < recipes.length; ri++) {
+          var ingredients = recipes[ri].ingredients || [];
+          for (var ii = 0; ii < ingredients.length; ii++) {
+            var ing = ingredients[ii];
+            var key = resolveName(ing.name) + '|' + ing.unit;
+            map[key] = (map[key] || 0) - ing.quantity * scale;
+            if (map[key] < 0) return false;
+          }
+        }
+      }
+      return true;
     }
 
     function macroBarHtml(label, current, target, cls) {
@@ -2820,17 +2830,27 @@
       meals.forEach(function (m) {
         m.combo.recipes.forEach(function (r) { allRecipes.push(r); });
       });
-      var map = inventoryMap();
-      var insufficient = [];
+      var startMap = inventoryMap();
+      var map = cloneMap(startMap);
+      var totalNeed = {};
+      var failed = {};
       allRecipes.forEach(function (recipe) {
         recipe.ingredients.forEach(function (ing) {
           var n = resolveName(ing.name);
           var key = n + '|' + ing.unit;
           var need = ing.quantity * scale;
-          if ((map[key] || 0) < need) {
-            insufficient.push(ing.name + ' ' + need + ing.unit);
+          totalNeed[key] = (totalNeed[key] || 0) + need;
+          var have = map[key] || 0;
+          if (have < need) {
+            failed[key] = { name: ing.name, unit: ing.unit };
+          } else {
+            map[key] = have - need;
           }
         });
+      });
+      var insufficient = Object.keys(failed).map(function (key) {
+        var f = failed[key];
+        return f.name + ' 需' + totalNeed[key] + f.unit + ' / 有' + (startMap[key] || 0) + f.unit;
       });
       if (insufficient.length > 0) {
         return { ok: false, msg: '库存不足：' + insufficient.join('、') };
@@ -3820,6 +3840,27 @@
       displayNut.estimated = mealDisplayNuts.some(function (n) { return n.estimated; });
       var displayKcal = displayNut.kcal;
 
+      var scaledRange = null;
+      if (isAdHoc && rec.nutritionRange) {
+        var itemsForRange = [];
+        rec.meals.forEach(function (meal) {
+          meal.combo.recipes.forEach(function (recipe) {
+            (recipe.ingredients || []).forEach(function (ing) {
+              itemsForRange.push({
+                name: ing.name,
+                unit: ing.unit,
+                quantity: ing.quantity * scale,
+                gramsPerUnit: getItemGramsPerUnit(ing)
+              });
+            });
+          });
+        });
+        scaledRange = estimateMealNutritionRange(itemsForRange, true);
+      }
+      var gapTips = (isAdHoc && scaledRange)
+        ? analyzeMealGapRange(scaledRange, rec.targets)
+        : analyzeMealGap(roundNut(displayNut), rec.targets);
+
       var html = '<div class="card recipe-card' + (isAdHoc ? ' ad-hoc-card' : '') + '">';
       html += '<div class="result-kicker">' + (isAdHoc ? '库存自由组合' : '可直接开做') + '</div>';
       html += '<div class="meal-summary"><div class="meal-name">这顿吃什么' +
@@ -3869,7 +3910,7 @@
       html += '<p class="nutrition-disclaimer">营养为饮食规划估算，非医疗用途</p>';
       html += '</div>';
 
-      rec.gapTips.forEach(function (tip) {
+      gapTips.forEach(function (tip) {
         html += '<div class="gap-tip">' + safeText(tip) + '</div>';
       });
 
