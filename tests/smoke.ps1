@@ -31,7 +31,11 @@ $checks = @(
   @{ name = "add-ingredients heading"; pattern = "添加食材" },
   @{ name = "fridge ice panel"; pattern = "#panel-inventory\.active" },
   @{ name = "shop-tray"; pattern = "shop-tray" },
-  @{ name = "shopCart state"; pattern = "shopCart" }
+  @{ name = "shopCart state"; pattern = "shopCart" },
+  @{ name = "nutrition100 field"; pattern = "nutrition100" },
+  @{ name = "nutrition data version"; pattern = "NUTRITION_DATA_VERSION" },
+  @{ name = "skinned chicken leg"; pattern = "带皮鸡腿肉" },
+  @{ name = "fatty beef"; pattern = "肥牛片" }
 )
 $failed = 0
 foreach ($c in $checks) {
