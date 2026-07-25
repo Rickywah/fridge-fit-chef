@@ -526,15 +526,77 @@
       margin-bottom: var(--spacing-8);
       padding-left: 2px;
     }
-    .shop-item { display: flex; align-items: center; gap: var(--spacing-12); padding: var(--spacing-8) 0; border-bottom: 1px solid var(--color-warm-mist); }
-    .shop-item:last-child { border-bottom: none; }
+    .shop-item {
+      display: flex; align-items: center; gap: var(--spacing-12);
+      padding: var(--spacing-8);
+      margin-bottom: var(--spacing-8);
+      background: var(--color-paper-white);
+      border: 1px solid var(--color-warm-mist);
+      border-radius: var(--radius-lg);
+    }
+    .shop-item.in-cart { border-color: var(--shell-deep); background: var(--color-soft-linen); }
     .shop-item-icon {
       width: 48px; height: 48px; border-radius: var(--radius); flex-shrink: 0;
       display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
       margin: 0; background: var(--color-soft-linen); border: 1px solid var(--color-warm-mist);
     }
-    .shop-item label { flex: 1; font-size: var(--text-body-sm); cursor: pointer; }
-    .shop-item input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--color-signal-blue); flex-shrink: 0; }
+    .shop-item-text { flex: 1; font-size: var(--text-body-sm); min-width: 0; }
+    .shop-item-text .shop-need { display: block; font-size: var(--text-caption); color: var(--color-sage-gray); margin-top: 2px; }
+    .shop-item-add {
+      flex-shrink: 0; min-width: 36px; height: 36px; padding: 0 10px;
+      border: none; border-radius: var(--radius); cursor: pointer;
+      background: var(--cta); color: var(--ink);
+      font-size: 1.25rem; font-weight: var(--font-weight-extrabold);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .shop-item-add.in-cart-btn {
+      background: var(--shell-deep); color: var(--ink);
+      font-size: var(--text-caption); font-weight: var(--font-weight-bold);
+    }
+    .shop-card { padding-bottom: var(--spacing-12); }
+    .shop-tray {
+      position: sticky;
+      bottom: calc(var(--tab-h) + var(--safe-b) + 8px);
+      z-index: 6;
+      margin-top: var(--spacing-12);
+      background: var(--ink);
+      color: var(--porcelain);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-12) var(--spacing-16);
+      box-shadow: 0 8px 28px rgba(28, 36, 33, 0.28);
+    }
+    .shop-tray-head {
+      font-size: var(--text-caption); opacity: 0.7; margin-bottom: var(--spacing-8);
+    }
+    .shop-tray-empty { font-size: var(--text-caption); opacity: 0.55; margin-bottom: var(--spacing-8); }
+    .shop-tray-row {
+      display: flex; align-items: center; gap: var(--spacing-8);
+      margin-bottom: var(--spacing-8);
+    }
+    .shop-tray-row:last-of-type { margin-bottom: var(--spacing-12); }
+    .shop-tray-name { flex: 1; font-size: var(--text-body-sm); font-weight: var(--font-weight-semibold); min-width: 0; }
+    .shop-tray-unit { font-size: var(--text-caption); opacity: 0.6; flex-shrink: 0; }
+    .shop-stepper {
+      display: flex; align-items: center; gap: 4px;
+      background: rgba(255, 255, 255, 0.1); border-radius: var(--radius);
+      padding: 2px; flex-shrink: 0;
+    }
+    .shop-stepper button {
+      width: 28px; height: 28px; border: none; border-radius: 6px;
+      background: transparent; color: var(--porcelain); cursor: pointer;
+      font-size: 1rem; font-weight: var(--font-weight-bold);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .shop-stepper button:active { background: rgba(255, 255, 255, 0.12); }
+    .shop-stepper .shop-qty {
+      min-width: 28px; text-align: center;
+      font-weight: var(--font-weight-extrabold); color: var(--cta);
+    }
+    .shop-tray-remove {
+      border: none; background: transparent; color: rgba(247, 248, 246, 0.55);
+      cursor: pointer; font-size: var(--text-caption); padding: 4px;
+    }
+    .shop-tray .btn-primary { width: 100%; }
 
     /* Full-width paper tab bar — readable labels */
     .tab-bar {
@@ -1608,6 +1670,8 @@
       recipeSearch: '',
       invExpanded: false,
       justAdded: null,
+      shopCart: [],
+      shopSourceList: null,
       _lastLocalSave: 0,
       _syncApplied: false
     };
@@ -3582,18 +3646,32 @@
       });
     }
 
-    function renderShoppingList(list) {
+    function shopCartIndexOf(idx) {
+      for (var i = 0; i < state.shopCart.length; i++) {
+        if (state.shopCart[i].idx === idx) return i;
+      }
+      return -1;
+    }
+
+    function renderShoppingList(list, opts) {
+      opts = opts || {};
       var noBlock = $('#no-recipe-block');
       var canAdHoc = hasAdHocIngredients();
       if (list.length === 0 && !canAdHoc) {
+        state.shopCart = [];
+        state.shopSourceList = null;
         noBlock.innerHTML = '<div class="card empty-state action-card"><div class="icon">🧊</div><p>库存还不够形成一顿饭<br>先去冰箱添加 2-3 个蛋白质和主食</p></div>';
         return;
       }
+      if (!opts.preserveCart) state.shopCart = [];
+      state.shopSourceList = list;
+
       var html = '';
       if (list.length === 0) {
         html += '<div class="card action-card"><p class="subtitle" style="margin-bottom:12px">预置菜谱暂时不匹配，但库存已经能组合出一顿可执行的饭。</p></div>';
       } else {
-        html += '<div class="card"><h2 class="card-title">补齐后可做</h2><p class="subtitle" style="margin-bottom:12px">勾选已经买到的食材，一键加入冰箱。</p>';
+        html += '<div class="card shop-card"><h2 class="card-title">补齐后可做</h2>';
+        html += '<p class="subtitle" style="margin-bottom:12px">点 + 加入本次已买，可改数量后一键入库。</p>';
         var shopGroups = {};
         list.forEach(function (item, i) {
           item._idx = i;
@@ -3608,17 +3686,46 @@
             catEmoji(cat) + ' ' + cat + '</div><ul class="shop-list">';
           shopGroups[cat].forEach(function (item) {
             var i = item._idx;
+            var inCart = shopCartIndexOf(i) >= 0;
             var bg = catColor(getFoodCat(item.name, item.unit));
-            html += '<li class="shop-item" data-idx="' + i + '">';
+            var need = Math.max(1, Math.ceil(item.need));
+            html += '<li class="shop-item' + (inCart ? ' in-cart' : '') + '" data-idx="' + i + '">';
             html += '<div class="shop-item-icon food-circle" style="background:' + bg + '">' + foodEmoji(item.name) + '</div>';
-            html += '<label for="shop-' + i + '">' + safeText(item.name) + ' 需 ' + Math.ceil(item.need) + safeText(item.unit);
+            html += '<div class="shop-item-text"><div>' + safeText(item.name) + '</div>';
+            html += '<span class="shop-need">需 ' + need + safeText(item.unit);
             if (item.have > 0) html += '（现有 ' + item.have + safeText(item.unit) + '）';
-            html += '</label>';
-            html += '<input type="checkbox" id="shop-' + i + '"></li>';
+            html += '</span></div>';
+            if (inCart) {
+              html += '<button type="button" class="shop-item-add in-cart-btn" data-action="remove" data-idx="' + i + '" aria-label="从本次已买移除">在清单</button>';
+            } else {
+              html += '<button type="button" class="shop-item-add" data-action="add" data-idx="' + i + '" aria-label="加入本次已买">+</button>';
+            }
+            html += '</li>';
           });
           html += '</ul></div>';
         });
-        html += '<button class="btn btn-primary" id="btn-add-shopped" style="margin-top:12px">将已勾选加入库存</button></div>';
+
+        html += '<div class="shop-tray" id="shop-tray">';
+        html += '<div class="shop-tray-head">本次已买 · ' + state.shopCart.length + ' 项</div>';
+        if (!state.shopCart.length) {
+          html += '<p class="shop-tray-empty">点上方 + 加入，可在此改数量</p>';
+        } else {
+          state.shopCart.forEach(function (c) {
+            html += '<div class="shop-tray-row" data-idx="' + c.idx + '">';
+            html += '<span aria-hidden="true">' + foodEmoji(c.name) + '</span>';
+            html += '<span class="shop-tray-name">' + safeText(c.name) + '</span>';
+            html += '<div class="shop-stepper">';
+            html += '<button type="button" data-action="dec" data-idx="' + c.idx + '" aria-label="减少">−</button>';
+            html += '<span class="shop-qty">' + c.qty + '</span>';
+            html += '<button type="button" data-action="inc" data-idx="' + c.idx + '" aria-label="增加">+</button>';
+            html += '</div>';
+            html += '<span class="shop-tray-unit">' + safeText(c.unit) + '</span>';
+            html += '<button type="button" class="shop-tray-remove" data-action="remove" data-idx="' + c.idx + '" aria-label="移除">移除</button>';
+            html += '</div>';
+          });
+        }
+        html += '<button class="btn btn-primary" id="btn-add-shopped" type="button">加入冰箱 · ' +
+          state.shopCart.length + ' 项</button></div></div>';
       }
       if (canAdHoc) {
         html += '<div class="card action-card" style="margin-top:12px"><p class="subtitle" style="margin-bottom:12px">不等补货，直接用现有食材试一套。</p>';
@@ -3627,35 +3734,76 @@
       noBlock.innerHTML = html;
 
       if (list.length) {
-        $('#btn-add-shopped').addEventListener('click', function () {
-          var added = 0;
-          list.forEach(function (item, i) {
-            var cb = $('#shop-' + i);
-            if (cb && cb.checked) {
-              var existing = state.inventory.find(function (inv) {
-                return resolveName(inv.name) === item.name && inv.unit === item.unit;
-              });
-              if (existing) {
-                existing.quantity += Math.ceil(item.need);
-              } else {
-                state.inventory.push({
-                  id: uid(),
+        noBlock.querySelectorAll('[data-action]').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var action = btn.dataset.action;
+            var idx = parseInt(btn.dataset.idx, 10);
+            var item = list[idx];
+            if (!item && action !== 'inc' && action !== 'dec') return;
+            var ci = shopCartIndexOf(idx);
+            if (action === 'add') {
+              if (ci < 0) {
+                state.shopCart.push({
+                  idx: idx,
                   name: item.name,
-                  quantity: Math.ceil(item.need),
                   unit: item.unit,
-                  gramsPerUnit: defaultGrams(item.name, item.unit) || 100
+                  qty: Math.max(1, Math.ceil(item.need))
                 });
               }
-              added++;
+              renderShoppingList(list, { preserveCart: true });
+              return;
+            }
+            if (action === 'remove') {
+              if (ci >= 0) state.shopCart.splice(ci, 1);
+              renderShoppingList(list, { preserveCart: true });
+              return;
+            }
+            if (action === 'inc' && ci >= 0) {
+              state.shopCart[ci].qty = Math.min(99, state.shopCart[ci].qty + 1);
+              renderShoppingList(list, { preserveCart: true });
+              return;
+            }
+            if (action === 'dec' && ci >= 0) {
+              state.shopCart[ci].qty = Math.max(1, state.shopCart[ci].qty - 1);
+              renderShoppingList(list, { preserveCart: true });
             }
           });
-          if (added > 0) {
-            saveInventory();
-            toast('已添加 ' + added + ' 项到库存');
+        });
+
+        $('#btn-add-shopped').addEventListener('click', function () {
+          if (!state.shopCart.length) {
+            toast('请先把已买食材加入清单');
+            return;
+          }
+          var okItems = 0;
+          var unitSum = 0;
+          var names = [];
+          state.shopCart.forEach(function (c) {
+            var qty = Math.max(1, parseFloat(c.qty) || 1);
+            var grams = defaultGrams(c.name, c.unit) || 100;
+            var before = inventoryQtyFor(c.name, c.unit);
+            if (addToInventory(c.name, c.unit, qty, grams)) {
+              var after = inventoryQtyFor(c.name, c.unit);
+              if (after >= before + qty - 0.001) {
+                okItems++;
+                unitSum += qty;
+                names.push(c.name + '×' + qty + c.unit);
+              }
+            }
+          });
+          if (okItems > 0) {
+            state.shopCart = [];
+            state.shopSourceList = null;
+            toast('已加入冰箱：' + names.join('、'));
             noBlock.classList.add('hidden');
             noBlock.innerHTML = '';
+            renderInventory();
+            if (state.activeTab !== 'inventory') {
+              /* fridge summary stays in sync for next visit */
+            }
           } else {
-            toast('请先勾选已买的食材');
+            toast('加入失败，请检查食材克数配置');
           }
         });
       }

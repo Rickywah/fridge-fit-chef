@@ -29,7 +29,9 @@ $checks = @(
   @{ name = "foodMatchesSearch"; pattern = "function foodMatchesSearch" },
   @{ name = "basa alias"; pattern = "'巴沙鱼'\s*:\s*'巴沙鱼柳'" },
   @{ name = "add-ingredients heading"; pattern = "添加食材" },
-  @{ name = "fridge ice panel"; pattern = "#panel-inventory\.active" }
+  @{ name = "fridge ice panel"; pattern = "#panel-inventory\.active" },
+  @{ name = "shop-tray"; pattern = "shop-tray" },
+  @{ name = "shopCart state"; pattern = "shopCart" }
 )
 $failed = 0
 foreach ($c in $checks) {
