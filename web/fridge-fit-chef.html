@@ -1750,8 +1750,22 @@
       customFoods: 'ffc_custom_foods',
       customRecipes: 'ffc_custom_recipes',
       stats: 'ffc_stats',
-      room: 'ffc_room'
+      room: 'ffc_room',
+      supplements: 'ffc_supplements',
+      supplementLog: 'ffc_supplement_log'
     };
+
+    var SUPPLEMENT_SEED = [
+      {
+        id: 'whey-default',
+        name: '乳清蛋白粉',
+        kind: 'protein_powder',
+        proteinPerServing: 21,
+        carbPerServing: 0,
+        fatPerServing: 0,
+        defaultServings: 1
+      }
+    ];
 
     // ─── State ───
     var state = {
@@ -1760,6 +1774,8 @@
       excludeIds: [],
       customFoods: [],
       customRecipes: [],
+      supplements: [],
+      supplementLog: { date: '', intakes: [] },
       currentRecommendation: null,
       activeTab: 'today',
       fridgeCat: '全部',
@@ -2187,6 +2203,9 @@
       state.excludeIds = loadJSON(STORAGE_KEYS.exclude, []);
       state.customFoods = loadJSON(STORAGE_KEYS.customFoods, []);
       state.customRecipes = loadJSON(STORAGE_KEYS.customRecipes, []);
+      state.supplements = mergeSupplements(loadJSON(STORAGE_KEYS.supplements, null));
+      state.supplementLog = loadJSON(STORAGE_KEYS.supplementLog, { date: '', intakes: [] });
+      ensureSupplementLog();
       rebuildDefaultGrams();
       state.inventory.forEach(function (item) {
         item.name = resolveName(item.name);
@@ -2228,6 +2247,98 @@
       saveJSON(STORAGE_KEYS.customRecipes, state.customRecipes);
       state._lastLocalSave = Date.now();
       SyncAdapter.schedulePush();
+    }
+
+    function saveSupplements() {
+      saveJSON(STORAGE_KEYS.supplements, state.supplements);
+    }
+
+    function saveSupplementLog() {
+      saveJSON(STORAGE_KEYS.supplementLog, state.supplementLog);
+    }
+
+    function mergeSupplements(stored) {
+      var byId = {};
+      SUPPLEMENT_SEED.forEach(function (s) {
+        byId[s.id] = {
+          id: s.id,
+          name: s.name,
+          kind: s.kind || 'protein_powder',
+          proteinPerServing: s.proteinPerServing,
+          carbPerServing: s.carbPerServing || 0,
+          fatPerServing: s.fatPerServing || 0,
+          isCustom: false
+        };
+      });
+      (stored || []).forEach(function (s) {
+        if (!s || !s.id) return;
+        if (byId[s.id]) {
+          if (s.proteinPerServing != null) byId[s.id].proteinPerServing = s.proteinPerServing;
+          if (s.carbPerServing != null) byId[s.id].carbPerServing = s.carbPerServing;
+          if (s.fatPerServing != null) byId[s.id].fatPerServing = s.fatPerServing;
+          if (s.name) byId[s.id].name = s.name;
+        } else {
+          byId[s.id] = {
+            id: s.id,
+            name: s.name || '蛋白粉',
+            kind: 'protein_powder',
+            proteinPerServing: s.proteinPerServing != null ? s.proteinPerServing : 21,
+            carbPerServing: s.carbPerServing || 0,
+            fatPerServing: s.fatPerServing || 0,
+            isCustom: true
+          };
+        }
+      });
+      return Object.keys(byId).map(function (k) { return byId[k]; });
+    }
+
+    function todayDateStr() {
+      var d = new Date();
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+    }
+
+    function ensureSupplementLog() {
+      var today = todayDateStr();
+      if (!state.supplementLog || state.supplementLog.date !== today) {
+        state.supplementLog = { date: today, intakes: [] };
+        saveSupplementLog();
+      }
+      if (!state.supplementLog.intakes) state.supplementLog.intakes = [];
+      return state.supplementLog;
+    }
+
+    function getSupplementById(id) {
+      return (state.supplements || []).find(function (s) { return s.id === id; });
+    }
+
+    function getTodaySupplementProtein() {
+      var log = ensureSupplementLog();
+      var total = 0;
+      (log.intakes || []).forEach(function (row) {
+        if (!row || !(row.servings > 0)) return;
+        var s = getSupplementById(row.id);
+        if (!s) return;
+        total += row.servings * (s.proteinPerServing || 0);
+      });
+      return total;
+    }
+
+    function setSupplementServings(id, servings) {
+      var log = ensureSupplementLog();
+      var n = Math.round(Math.max(0, servings) * 2) / 2;
+      var list = (log.intakes || []).filter(function (row) { return row.id !== id; });
+      if (n > 0) list.push({ id: id, servings: n });
+      log.intakes = list;
+      state.supplementLog = log;
+      saveSupplementLog();
+    }
+
+    function getSupplementServings(id) {
+      var log = ensureSupplementLog();
+      var row = (log.intakes || []).find(function (r) { return r.id === id; });
+      return row && row.servings > 0 ? row.servings : 0;
     }
 
     // ─── Nutrition ───
@@ -2302,6 +2413,19 @@
         protein: Math.round(daily.protein * ratio),
         carb: Math.round(daily.carb * ratio),
         fat: Math.round(daily.fat * ratio)
+      };
+    }
+
+    function effectiveMealTargets(daily, ratio) {
+      var base = mealTargets(daily, ratio);
+      var suppP = Math.round(getTodaySupplementProtein());
+      var protein = Math.max(0, base.protein - suppP);
+      return {
+        protein: protein,
+        carb: base.carb,
+        fat: base.fat,
+        kcal: protein * 4 + base.carb * 4 + base.fat * 9,
+        supplementProtein: suppP
       };
     }
 
@@ -2665,8 +2789,7 @@
       }
 
       var daily = calcDailyTargets(state.settings);
-      var targets = mealTargets(daily, MEAL_RATIO);
-      targets.kcal = nutKcal(targets);
+      var targets = effectiveMealTargets(daily, MEAL_RATIO);
       var ingredients = picked.map(function (item) {
         return { name: item.name, quantity: 1, unit: item.unit };
       });
@@ -2721,6 +2844,7 @@
         kcal: midNut.kcal,
         kcalRange: nutRange ? nutRange.kcal : null,
         targets: targets,
+        supplementProtein: targets.supplementProtein || 0,
         gapTips: nutRange ? analyzeMealGapRange(nutRange, targets) : analyzeMealGap(midNut, targets),
         adhocRecipe: recipe
       };
@@ -2831,8 +2955,7 @@
 
     function buildMealPlan(excludePlanIds, randomize) {
       var daily = calcDailyTargets(state.settings);
-      var targets = mealTargets(daily, MEAL_RATIO);
-      targets.kcal = nutKcal(targets);
+      var targets = effectiveMealTargets(daily, MEAL_RATIO);
       var map = inventoryMap();
       var feasible = getFeasibleRecipesFromMap(map);
       var pick = pickBestMeal(feasible, targets, [], randomize);
@@ -2857,6 +2980,7 @@
         kcal: nut.kcal,
         estimated: nut.estimated,
         targets: targets,
+        supplementProtein: targets.supplementProtein || 0,
         gapTips: analyzeMealGap(nut, targets)
       };
     }

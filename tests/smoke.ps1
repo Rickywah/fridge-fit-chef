@@ -51,7 +51,11 @@ $checks = @(
   @{ name = "goal cut ratio"; pattern = "cut:\s*\{[^}]*ratio:\s*0\.8" },
   @{ name = "goal chips"; pattern = 'id="goal-chips"' },
   @{ name = "data-goal cut"; pattern = 'data-goal="cut"' },
-  @{ name = "hero goal copy"; pattern = "目标 · 今日约" }
+  @{ name = "hero goal copy"; pattern = "目标 · 今日约" },
+  @{ name = "SUPPLEMENT_SEED"; pattern = "SUPPLEMENT_SEED" },
+  @{ name = "effectiveMealTargets"; pattern = "function effectiveMealTargets" },
+  @{ name = "getTodaySupplementProtein"; pattern = "function getTodaySupplementProtein" },
+  @{ name = "whey default 21"; pattern = "proteinPerServing:\s*21" }
 )
 $failed = 0
 foreach ($c in $checks) {
