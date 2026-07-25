@@ -66,9 +66,14 @@ copy config\config.example.js config\config.js
 
 ## 部署（GitHub Pages）
 
-1. 将仓库推送到 GitHub。
-2. Settings → Pages → 发布目录选 **`/web`**（或上传 `dist/deploy.zip` 到 Netlify）。
-3. 若用 GitHub Pages 且需 Supabase，将 `config/config.js` 复制为 `web/config.js` 并改 HTML 引用为 `config.js`（分享包脚本已自动处理扁平布局）。
+在线演示（仓库 `main` 根目录发布）：
+
+**https://Rickywah.github.io/fridge-fit-chef/**
+
+1. Settings → Pages → Build：Deploy from a branch → Branch **`main`** → Folder **`/` (root)**。
+2. 根目录含 [`.nojekyll`](.nojekyll)，避免 Jekyll 干扰静态文件。
+3. 入口：`/` → `web/fridge-fit-chef.html`。共享同步仍依赖本地/自行部署的 `config/config.js`（gitignored，Pages 上默认可离线用）。
+4. 也可上传 `dist/deploy.zip` 到 Netlify Drop（见 `scripts\deploy-to-url.ps1`）。
 
 本地校验：`tests\smoke.ps1`
 
